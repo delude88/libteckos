@@ -117,6 +117,7 @@ jobs:
                 -G Ninja
                 -D CMAKE_MAKE_PROGRAM=${ninja_program}
                 -D CMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+                -D nlohmann_json_DIR=C:/vcpkg/packages/nlohmann-json_x86-windows/lib/cmake/nlohmann_json
               RESULT_VARIABLE result
             )
           else()
