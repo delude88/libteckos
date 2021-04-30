@@ -1,2 +1,2 @@
 # libteckos
-C++ client library for Teckos
+Header only C++ client library for Teckos
