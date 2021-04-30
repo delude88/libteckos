@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.16.0)
 
-if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-  set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-      CACHE STRING "")
-endif()
+if (DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+            CACHE STRING "")
+endif ()
 
 ### GLOBAL CONFIGURATION
 project(TeckosClient
@@ -21,8 +21,11 @@ if (APPLE)
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/BrewResolver.cmake)
 endif (APPLE)
 
-add_compile_definitions(DEBUG)
-find_package(nlohmann_json 3.2.0 REQUIRED)
+if (WIN32)
+    find_package(nlohmann_json REQUIRED)
+else ()
+    find_package(nlohmann_json 3.2.0 REQUIRED)
+endif ()
 find_package(cpprestsdk REQUIRED)
 find_package(OpenSSL REQUIRED)
 
