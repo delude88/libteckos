@@ -30,6 +30,7 @@ jobs:
       - uses: actions/checkout@v1
 
       - name: Installing dependencies
+        shell: bash
         run: |
           if [ "$RUNNER_OS" == "macOS" ]; then
             brew install nlohmann-json cpprestsdk openssl
@@ -40,7 +41,7 @@ jobs:
           else
             echo "$RUNNER_OS not supported"
             exit 1
-          endif
+          fi
 
       - name: Download Ninja and CMake
         id: cmake_and_ninja
