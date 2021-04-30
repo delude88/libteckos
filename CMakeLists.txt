@@ -42,9 +42,9 @@ target_link_libraries(teckos
         OpenSSL::Crypto
         cpprestsdk::cpprest)
 
-add_executable(cli EXCLUDE_FROM_ALL "${CMAKE_CURRENT_SOURCE_DIR}/src/cli.cc")
-target_include_directories(cli PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(cli
+add_executable(teckos-example EXCLUDE_FROM_ALL "${CMAKE_CURRENT_SOURCE_DIR}/src/cli.cc")
+target_include_directories(teckos-example PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(teckos-example
         PUBLIC
         teckos)
 
