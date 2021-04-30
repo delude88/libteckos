@@ -1,33 +1,18 @@
 #include "teckos/client.h"
 
-teckos::client::client()
-    : connected(false), shouldConnect(false)
-{
-  /*
-  ws->set_message_handler([&](const websocket_incoming_message& ret_msg) {
-    handleMessage(ret_msg);
-  });
-  ws->set_close_handler([&](websocket_close_status close_status,
-                           const utility::string_t& reason,
-                           const std::error_code& error) {
-    std::cout << "HANDLE CLOSE" << std::endl;
-    handleClose(close_status, reason, error);
-  });
-   */
-}
+#include <memory>
+
+teckos::client::client() : connected(false), reconnect(false) {}
 
 teckos::client::~client()
 {
-  shouldConnect = false;
-  if( connectionThread ) {
-    connectionThread->join();
-  }
-  /*if(reconnectionThread) {
+  reconnect = false;
+  if(reconnectionThread) {
     reconnectionThread->join();
   }
   if(connected) {
     disconnect();
-  }*/
+  }
 }
 
 void teckos::client::on(
@@ -43,154 +28,119 @@ void teckos::client::off(const std::string& event)
   eventHandlers.erase(event);
 }
 
-void teckos::client::connect(const std::string& url) noexcept(false)
+pplx::task<void> teckos::client::connect(const std::string& url) noexcept(false)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   info = {url, false};
-  shouldConnect = true;
-  if( !connectionThread ) {
-    connectionThread.reset(new std::thread(&teckos::client::service, this));
-  }
-  /*
+  const auto connectionFunc = [&]() {
+    // Create new websocket client and attach handler
+    ws = std::make_shared<websocket_callback_client>();
+    ws->set_message_handler([&](const websocket_incoming_message& ret_msg) {
+      handleMessage(ret_msg);
+    });
+    ws->set_close_handler([&](websocket_close_status close_status,
+                              const utility::string_t& reason,
+                              const std::error_code& error) {
+      handleClose(close_status, reason, error);
+    });
+    return ws->connect(U(url)).then([&]() {
+      reconnect = false;
+      connected = true;
+      if(connectedHandler) {
+        connectedHandler();
+      }
+    });
+  };
   if(connected) {
-    disconnect().wait();
+    return disconnect().then(connectionFunc);
+  } else {
+    return connectionFunc();
   }
-  shouldConnect = true;
-  return ws->connect(U(url)).then([&]() {
-    connected = true;
-    if(connectedHandler) {
-      connectedHandler();
-    }
-  });*/
 }
 
-void
+pplx::task<void>
 teckos::client::connect(const std::string& url, const std::string& jwt,
                         const nlohmann::json& initialPayload) noexcept(false)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   info = {url, true, jwt, initialPayload};
-  shouldConnect = true;
-  if( !connectionThread ) {
-    connectionThread.reset(new std::thread(&teckos::client::service, this));
-  }
-  /*
   if(connected) {
-    disconnect().wait();
+    return disconnect().then([&]() { return connect(); }).then([]() {
+      std::cout << "Like in JS" << std::endl;
+    });
   }
-  shouldConnect = true;
-  std::cout << "Try to reconnect..." << std::endl;
-  return ws->connect(U(url)).then([&]() {
-    std::cout << "OK!" << std::endl;
+  return connect();
+}
+
+pplx::task<void> teckos::client::connect()
+{
+  // Create new websocket client and attach handler
+  ws = std::make_shared<websocket_callback_client>();
+  ws->set_message_handler([&](const websocket_incoming_message& ret_msg) {
+    handleMessage(ret_msg);
+  });
+  ws->set_close_handler([&](websocket_close_status close_status,
+                            const utility::string_t& reason,
+                            const std::error_code& error) {
+    handleClose(close_status, reason, error);
+  });
+  // Connect
+  return ws->connect(U(info.url)).then([&]() {
+    reconnect = false;
     connected = true;
     if(connectedHandler) {
-      std::cout << "CALLING connectedHandler" << std::endl;
       connectedHandler();
     }
-    nlohmann::json p = initialPayload;
-    p["token"] = jwt;
-    std::cout << "Sending token" << std::endl;
-    return this->emit("token", p);
-  });*/
-}
-
-void teckos::client::service()
-{
-  while(shouldConnect) {
-    if(!connected) {
-      std::unique_lock<std::recursive_mutex> lock(mutex);
-      try {
-        ws.reset(new websocket_callback_client());
-        ws->set_message_handler([&](const websocket_incoming_message& ret_msg) {
-          handleMessage(ret_msg);
-        });
-        ws->set_close_handler([&](websocket_close_status close_status,
-                                  const utility::string_t& reason,
-                                  const std::error_code& error) {
-          std::cout << "HANDLE CLOSE" << std::endl;
-          handleClose(close_status, reason, error);
-        });
-        std::cout << "Connecting to " << info.url << std::endl;
-        std::cout << "HOST:" << ws->uri().host() << std::endl;
-        std::cout << "WILL Connecting to " << info.url << std::endl;
-        auto bla = ws->connect(U(info.url));
-        std::cout << "NOW Connecting to " << info.url << std::endl;
-        bla.wait();
-        std::cout << "Sucessfully connected!" << std::endl;
-        connected = true;
-        if(connectedHandler) {
-          connectedHandler();
-        }
-        if(info.hasJwt) {
-          nlohmann::json p = info.payload;
-          p["token"] = info.jwt;
-          std::cout << "Sending token" << std::endl;
-          this->emit("token", p);
-        }
-      }
-      catch(...) {
-        std::cout << "Connecting failed!" << std::endl;
-      }
-      lock.unlock();
-      std::this_thread::sleep_for(timeout);
+    if(info.hasJwt) {
+      nlohmann::json p = info.payload;
+      p["token"] = info.jwt;
+      return this->emit("token", p);
     }
-  }
-  // Disconnect
-  if( ws ) {
-    ws->close().then([&]() { connected = false; });
-  }
+    return pplx::task<void>();
+  });
 }
 
-void teckos::client::disconnect()
+pplx::task<void> teckos::client::disconnect()
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  shouldConnect = false;
-  if( connectionThread ) {
-    connectionThread->join();
+  reconnect = false;
+  if(ws) {
+    return ws->close();
   }
-  /*
-  // tce.set();
-  return ws->close().then([&]() { connected = false; });*/
+  return pplx::task<void>();
 }
-
 
 void teckos::client::handleClose(websocket_close_status status,
                                  const utility::string_t&,
                                  const std::error_code&)
 {
-  std::cout << "handleClose" << std::endl;
   connected = false;
-}
-/*
-void teckos::client::handleClose(websocket_close_status status,
-                                 const utility::string_t&,
-                                 const std::error_code&)
-{
-  connected = false;
-  if(disconnectedHandler) {
-    disconnectedHandler(status == websocket_close_status::normal);
-  }
-  if(!reconnecting && settings.reconnect) {
-    if(reconnectionThread) {
-      reconnectionThread->join();
+  if(status != websocket_close_status::normal) {
+    std::cout << "HANDLE ABNORMAL CLOSE" << std::endl;
+    // Abnormal close, reconnect may be appropriate
+    if(settings.reconnect && !reconnect) {
+      reconnect = true;
+      // Wait for old reconnect
+      if(reconnectionThread) {
+        reconnectionThread->join();
+      }
+      reconnectionThread = std::make_unique<std::thread>(
+          &teckos::client::reconnectionService, this);
     }
-    reconnecting = true;
-    reconnectionThread.reset(new std::thread(&teckos::client::reconnect, this));
   }
 }
-void teckos::client::reconnect()
+
+void teckos::client::reconnectionService()
 {
   std::this_thread::sleep_for(timeout);
-  while(shouldConnect && !connected && settings.reconnect) {
+  while(reconnect && !connected && settings.reconnect) {
     if(reconnectingHandler) {
       reconnectingHandler();
     }
     try {
       if(info.hasJwt) {
         if(settings.sendPayloadOnReconnect) {
-          std::cout << "YUP" << std::endl;
           connect(info.url, info.jwt, info.payload).wait();
-          std::cout << "DONE" << std::endl;
         } else {
           connect(info.url, info.jwt, {}).wait();
         }
@@ -198,18 +148,14 @@ void teckos::client::reconnect()
         connect(info.url).wait();
       }
       if(reconnectedHandler) {
-        std::cout << "Calling" << std::endl;
         reconnectedHandler();
       }
     }
     catch(...) {
-      std::cout << "EXCEPTION" << std::endl;
       std::this_thread::sleep_for(timeout);
     }
   }
-  std::cout << "Finished thread" << std::endl;
-  reconnecting = false;
-}*/
+}
 
 void teckos::client::handleMessage(const websocket_incoming_message& ret_msg)
 {
@@ -275,7 +221,7 @@ pplx::task<void> teckos::client::emit(
 }
 
 pplx::task<void>
-teckos::client::send(std::initializer_list<nlohmann::json> args)
+teckos::client::send(const nlohmann::json& args)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   return sendPackage({PacketType::EVENT, args, std::nullopt});
@@ -312,10 +258,10 @@ bool teckos::client::isConnected() const
   return connected;
 }
 
-void teckos::client::setReconnect(bool reconnect)
+void teckos::client::setReconnect(bool shallReconnect)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  settings.reconnect = reconnect;
+  settings.reconnect = shallReconnect;
 }
 
 bool teckos::client::shouldReconnect() const

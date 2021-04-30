@@ -69,15 +69,15 @@ namespace teckos {
 
     void off(const std::string& event);
 
-    void connect(const std::string& url) noexcept(false);
+    pplx::task<void> connect(const std::string& url) noexcept(false);
 
-    void
+    pplx::task<void>
     connect(const std::string& url, const std::string& jwt,
             const nlohmann::json& initialPayload) noexcept(false);
 
     bool isConnected() const;
 
-    void disconnect();
+    pplx::task<void> disconnect();
 
     void setMessageHandler(
         const std::function<void(const std::vector<nlohmann::json>&)>& handler);
@@ -92,7 +92,9 @@ namespace teckos {
              callback);
 
   protected:
-    void service();
+    pplx::task<void> connect();
+
+    void reconnectionService();
 
     void handleClose(websocket_close_status close_status,
                      const utility::string_t& reason,
@@ -100,9 +102,7 @@ namespace teckos {
 
     void handleMessage(const websocket_incoming_message& ret_msg);
 
-    //void reconnect();
-
-    pplx::task<void> send(std::initializer_list<nlohmann::json> args);
+    pplx::task<void> send(const nlohmann::json& args);
 
     pplx::task<void> sendPackage(packet p);
 
@@ -120,13 +120,11 @@ namespace teckos {
     std::map<uint32_t, std::function<void(const std::vector<nlohmann::json>&)>>
         acks;
     std::shared_ptr<websocket_callback_client> ws;
-    std::unique_ptr<std::thread> connectionThread;
-    bool shouldConnect;
+    std::unique_ptr<std::thread> reconnectionThread;
+    bool reconnect;
     bool connected;
-    //std::unique_ptr<std::thread> reconnectionThread;
     connection_settings settings;
     connection_info info;
-    // pplx::task<void> receiveTask;
   };
 } // namespace teckos
 
