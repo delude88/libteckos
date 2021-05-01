@@ -35,37 +35,35 @@ namespace teckos {
     nlohmann::json payload = {};
   };
 
-  // task_completion_event<void> tce;
-
   class client {
   public:
-    client();
+    client() noexcept;
     ~client();
 
-    void setReconnect(bool reconnect);
+    void setReconnect(bool reconnect) noexcept;
 
-    bool shouldReconnect() const;
+    bool shouldReconnect() const noexcept;
 
-    void sendPayloadOnReconnect(bool sendPayloadOnReconnect);
+    void sendPayloadOnReconnect(bool sendPayloadOnReconnect) noexcept;
 
-    bool isSendingPayloadOnReconnect() const;
+    bool isSendingPayloadOnReconnect() const noexcept;
 
-    void setTimeout(std::chrono::milliseconds ms);
+    void setTimeout(std::chrono::milliseconds ms) noexcept;
 
-    std::chrono::milliseconds getTimeout() const;
+    std::chrono::milliseconds getTimeout() const noexcept;
 
     void on(const std::string& event,
             const std::function<void(const nlohmann::json&)>& handler);
 
-    void on_reconnected(const std::function<void()>& handler);
-    void on_reconnecting(const std::function<void()>& handler);
-    void on_connected(const std::function<void()>& handler);
+    void on_reconnected(const std::function<void()>& handler) noexcept;
+    void on_reconnecting(const std::function<void()>& handler) noexcept;
+    void on_connected(const std::function<void()>& handler) noexcept;
     /**
      * Add an handler to get notified when the connection is closed.
      * Do only small tasks or create a separate thread when doing complex logic.
      * @param handler with parameter true, if normal exit, otherwise false
      */
-    void on_disconnected(const std::function<void(bool)>& handler);
+    void on_disconnected(const std::function<void(bool)>& handler) noexcept;
 
     void off(const std::string& event);
 
@@ -75,21 +73,23 @@ namespace teckos {
     connect(const std::string& url, const std::string& jwt,
             const nlohmann::json& initialPayload) noexcept(false);
 
-    bool isConnected() const;
+    bool isConnected() const noexcept;
 
-    pplx::task<void> disconnect();
+    pplx::task<void> disconnect() noexcept;
 
     void setMessageHandler(
-        const std::function<void(const std::vector<nlohmann::json>&)>& handler);
+        const std::function<void(const std::vector<nlohmann::json>&)>&
+            handler) noexcept;
 
-    pplx::task<void> emit(const std::string& event);
+    pplx::task<void> emit(const std::string& event) noexcept(false);
 
-    pplx::task<void> emit(const std::string& event, const nlohmann::json& args);
+    pplx::task<void> emit(const std::string& event,
+                          const nlohmann::json& args) noexcept(false);
 
     pplx::task<void>
     emit(const std::string& event, const nlohmann::json& args,
          const std::function<void(const std::vector<nlohmann::json>&)>&
-             callback);
+             callback) noexcept(false);
 
   protected:
     pplx::task<void> connect();
@@ -102,9 +102,9 @@ namespace teckos {
 
     void handleMessage(const websocket_incoming_message& ret_msg);
 
-    pplx::task<void> send(const nlohmann::json& args);
+    pplx::task<void> send(const nlohmann::json& args) noexcept(false);
 
-    pplx::task<void> sendPackage(packet p);
+    pplx::task<void> sendPackage(packet p) noexcept(false);
 
   private:
     std::chrono::milliseconds timeout = std::chrono::milliseconds(500);

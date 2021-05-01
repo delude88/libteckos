@@ -2,7 +2,7 @@
 
 #include <memory>
 
-teckos::client::client() : connected(false), reconnect(false) {}
+teckos::client::client() noexcept : connected(false), reconnect(false) {}
 
 teckos::client::~client()
 {
@@ -32,30 +32,10 @@ pplx::task<void> teckos::client::connect(const std::string& url) noexcept(false)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   info = {url, false};
-  const auto connectionFunc = [&]() {
-    // Create new websocket client and attach handler
-    ws = std::make_shared<websocket_callback_client>();
-    ws->set_message_handler([&](const websocket_incoming_message& ret_msg) {
-      handleMessage(ret_msg);
-    });
-    ws->set_close_handler([&](websocket_close_status close_status,
-                              const utility::string_t& reason,
-                              const std::error_code& error) {
-      handleClose(close_status, reason, error);
-    });
-    return ws->connect(U(url)).then([&]() {
-      reconnect = false;
-      connected = true;
-      if(connectedHandler) {
-        connectedHandler();
-      }
-    });
-  };
   if(connected) {
-    return disconnect().then(connectionFunc);
-  } else {
-    return connectionFunc();
+    return disconnect().then([&]() { return connect(); });
   }
+  return connect();
 }
 
 pplx::task<void>
@@ -65,9 +45,7 @@ teckos::client::connect(const std::string& url, const std::string& jwt,
   std::lock_guard<std::recursive_mutex> lock(mutex);
   info = {url, true, jwt, initialPayload};
   if(connected) {
-    return disconnect().then([&]() { return connect(); }).then([]() {
-      std::cout << "Like in JS" << std::endl;
-    });
+    return disconnect().then([&]() { return connect(); });
   }
   return connect();
 }
@@ -100,7 +78,7 @@ pplx::task<void> teckos::client::connect()
   });
 }
 
-pplx::task<void> teckos::client::disconnect()
+pplx::task<void> teckos::client::disconnect() noexcept
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   reconnect = false;
@@ -116,8 +94,10 @@ void teckos::client::handleClose(websocket_close_status status,
 {
   connected = false;
   if(status != websocket_close_status::normal) {
-    std::cout << "HANDLE ABNORMAL CLOSE" << std::endl;
     // Abnormal close, reconnect may be appropriate
+    if(disconnectedHandler) {
+      disconnectedHandler(false);
+    }
     if(settings.reconnect && !reconnect) {
       reconnect = true;
       // Wait for old reconnect
@@ -126,6 +106,10 @@ void teckos::client::handleClose(websocket_close_status status,
       }
       reconnectionThread = std::make_unique<std::thread>(
           &teckos::client::reconnectionService, this);
+    }
+  } else {
+    if(disconnectedHandler) {
+      disconnectedHandler(true);
     }
   }
 }
@@ -164,7 +148,8 @@ void teckos::client::handleMessage(const websocket_incoming_message& ret_msg)
     return;
   nlohmann::json j = nlohmann::json::parse(ret_str);
   const PacketType type = j["type"];
-  if(type == PacketType::EVENT) {
+  switch(type) {
+  case PacketType::EVENT: {
     const nlohmann::json jsonData = j["data"];
     if(jsonData.is_array() && !jsonData.empty()) {
       std::vector<nlohmann::json> data = j["data"];
@@ -181,18 +166,27 @@ void teckos::client::handleMessage(const websocket_incoming_message& ret_msg)
         eventHandlers[event](payload);
       }
     }
-  } else {
+    break;
+  };
+  case PacketType::ACK: {
     // type === PacketType::ACK
     // We have to call the function
     const int32_t id = j["id"];
     if(acks.count(id) > 0) {
-      acks.at(id)(j["data"]);
+      acks.at(id)(j["data"].get<std::vector<nlohmann::json>>());
     }
+    break;
+  };
+  default: {
+    std::cerr << "Warning: unknown packet type received: " << std::endl;
+    break;
+  }
   }
 }
 
 void teckos::client::setMessageHandler(
-    const std::function<void(const std::vector<nlohmann::json>&)>& handler)
+    const std::function<void(const std::vector<nlohmann::json>&)>&
+        handler) noexcept
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   msgHandler = handler;
@@ -220,8 +214,7 @@ pplx::task<void> teckos::client::emit(
   return sendPackage({PacketType::EVENT, {event, args}, fnId++});
 }
 
-pplx::task<void>
-teckos::client::send(const nlohmann::json& args)
+pplx::task<void> teckos::client::send(const nlohmann::json& args)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   return sendPackage({PacketType::EVENT, args, std::nullopt});
@@ -242,63 +235,67 @@ pplx::task<void> teckos::client::sendPackage(teckos::packet p)
   return ws->send(msg);
 }
 
-void teckos::client::setTimeout(std::chrono::milliseconds ms)
+void teckos::client::setTimeout(std::chrono::milliseconds ms) noexcept
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   timeout = ms;
 }
 
-std::chrono::milliseconds teckos::client::getTimeout() const
+std::chrono::milliseconds teckos::client::getTimeout() const noexcept
 {
   return timeout;
 }
 
-bool teckos::client::isConnected() const
+bool teckos::client::isConnected() const noexcept
 {
   return connected;
 }
 
-void teckos::client::setReconnect(bool shallReconnect)
+void teckos::client::setReconnect(bool shallReconnect) noexcept
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   settings.reconnect = shallReconnect;
 }
 
-bool teckos::client::shouldReconnect() const
+bool teckos::client::shouldReconnect() const noexcept
 {
   return settings.reconnect;
 }
 
-void teckos::client::sendPayloadOnReconnect(bool sendPayloadOnReconnect)
+void teckos::client::sendPayloadOnReconnect(
+    bool sendPayloadOnReconnect) noexcept
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   settings.sendPayloadOnReconnect = sendPayloadOnReconnect;
 }
 
-bool teckos::client::isSendingPayloadOnReconnect() const
+bool teckos::client::isSendingPayloadOnReconnect() const noexcept
 {
   return settings.sendPayloadOnReconnect;
 }
 
-void teckos::client::on_connected(const std::function<void()>& handler)
+void teckos::client::on_connected(const std::function<void()>& handler) noexcept
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   connectedHandler = handler;
 }
 
-void teckos::client::on_reconnected(const std::function<void()>& handler)
+void teckos::client::on_reconnected(
+    const std::function<void()>& handler) noexcept
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   reconnectedHandler = handler;
 }
 
-void teckos::client::on_reconnecting(const std::function<void()>& handler)
+void teckos::client::on_reconnecting(
+    const std::function<void()>& handler) noexcept
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   reconnectingHandler = handler;
 }
 
-void teckos::client::on_disconnected(const std::function<void(bool)>& handler)
+void teckos::client::on_disconnected(
+    const std::function<void(bool)>& handler) noexcept
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   disconnectedHandler = handler;
