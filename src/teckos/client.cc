@@ -2,7 +2,7 @@
 
 #include <memory>
 
-teckos::client::client() noexcept : connected(false), reconnect(false) {}
+teckos::client::client() noexcept : reconnect(false), connected(false) {}
 
 teckos::client::~client()
 {

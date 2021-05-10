@@ -31,7 +31,7 @@ namespace teckos {
   struct connection_info {
     std::string url;
     bool hasJwt = false;
-    std::string jwt;
+    std::string jwt = {};
     nlohmann::json payload = {};
   };
 

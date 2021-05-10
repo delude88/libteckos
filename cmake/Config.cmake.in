@@ -1,0 +1,10 @@
+@PACKAGE_INIT@
+
+# REQUIREMENTS
+find_package(nlohmann_json 3.2.0 REQUIRED)
+find_package(cpprestsdk REQUIRED)
+find_package(OpenSSL REQUIRED)
+
+set_and_check(TECKOS_INCLUDE_DIR "@PACKAGE_INCLUDE_INSTALL_DIR@")
+
+check_required_components("@PROJECT_NAME@")
