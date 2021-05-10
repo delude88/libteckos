@@ -48,7 +48,7 @@ target_link_libraries(teckos-example
         PUBLIC
         teckos)
 
-include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/teckos DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(TARGETS teckos
         PUBLIC_HEADER
