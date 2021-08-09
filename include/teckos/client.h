@@ -13,6 +13,7 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include <optional>
 
 using namespace web::websockets::client;
 using namespace pplx;
