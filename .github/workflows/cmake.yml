@@ -42,9 +42,7 @@ jobs:
           if [ "$RUNNER_OS" == "macOS" ]; then
             brew install nlohmann-json cpprestsdk openssl
           elif [ "$RUNNER_OS" == "Windows" ]; then
-            vcpkg integrate install
-            vcpkg install cpprestsdk cpprestsdk:x64-windows nlohmann-json
-            echo "vcpkg root is here: VCPKG_INSTALLATION_ROOT"
+            conan install -if build .
           elif [ "$RUNNER_OS" == "Linux" ]; then
             sudo apt update && sudo apt install --assume-yes libcpprest-dev nlohmann-json3-dev
           else
