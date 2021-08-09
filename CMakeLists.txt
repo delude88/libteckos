@@ -53,7 +53,9 @@ add_library(${PROJECT_NAME}::teckos ALIAS teckos)
 target_include_directories(teckos PUBLIC
         $<BUILD_INTERFACE:${INCLUDE_DIR}>
         $<INSTALL_INTERFACE:include>)
+if(CMAKE_COMPILER_IS_GNUCC)
 target_compile_options(teckos PRIVATE -Wall -Wextra -pedantic -Werror)
+endif()
 target_link_libraries(teckos
         PUBLIC
         nlohmann_json::nlohmann_json
