@@ -34,7 +34,6 @@ jobs:
            pwd
            pip3 install wheel setuptools
            pip3 install conan
-           echo "::add-path::/home/runner/.local/bin"
            conan --version
 
       - name: Installing dependencies
