@@ -36,19 +36,10 @@ jobs:
            pip3 install conan
            conan --version
 
-      - name: Installing dependencies
+      - name: Installing dependencies with Conan
         shell: bash
         run: |
-          if [ "$RUNNER_OS" == "macOS" ]; then
-            brew install nlohmann-json cpprestsdk openssl
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            conan install -if build .
-          elif [ "$RUNNER_OS" == "Linux" ]; then
-            sudo apt update && sudo apt install --assume-yes libcpprest-dev nlohmann-json3-dev
-          else
-            echo "$RUNNER_OS not supported"
-            exit 1
-          fi
+          conan install -if build .
 
       - name: Download Ninja and CMake
         id: cmake_and_ninja

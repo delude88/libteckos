@@ -35,13 +35,12 @@ if (APPLE)
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/FixAppleArchitecture.cmake)
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/BrewResolver.cmake)
 endif (APPLE)
-if (WIN32)
-	message("Libteckos has CMAKE_MODULE_PATH as: ${CMAKE_MODULE_PATH}, but should use ${CMAKE_BINARY_DIR} to find the version conan installed!")
-	list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
-    find_package(nlohmann_json REQUIRED)
-else ()
-    find_package(nlohmann_json 3.2.0 REQUIRED)
-endif ()
+
+## Prepare use of Conan
+message("Libteckos has CMAKE_MODULE_PATH as: ${CMAKE_MODULE_PATH}, but should use ${CMAKE_BINARY_DIR} to find the version conan installed!")
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
+
+find_package(nlohmann_json REQUIRED)
 find_package(cpprestsdk REQUIRED)
 find_package(OpenSSL REQUIRED)
 
