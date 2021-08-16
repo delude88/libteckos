@@ -10,11 +10,11 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          #- {
-          #  name: "Windows Latest MinGW", artifact: "Windows-MinGW.tar.xz",
-          #  os: windows-latest,
-          #  build_type: "Release", cc: "gcc", cxx: "g++"
-          #}
+          - {
+            name: "Windows Latest", artifact: "Windows-MSVC.tar.xz",
+            os: windows-latest,
+            cc: "cl", cxx: "cl", environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars64.bat"
+          }
           - {
             name: "Ubuntu Latest GCC", artifact: "Linux.tar.xz",
             os: ubuntu-latest,
@@ -28,22 +28,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
+      
+      - name: Download Conan package manager.
+        run: |
+           pwd
+           pip3 install wheel setuptools
+           pip3 install conan
+           conan --version
 
-      - name: Installing dependencies
+      - name: Installing dependencies with Conan
         shell: bash
         run: |
-          if [ "$RUNNER_OS" == "macOS" ]; then
-            brew install nlohmann-json cpprestsdk openssl
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            vcpkg integrate install
-            vcpkg install cpprestsdk cpprestsdk:x64-windows nlohmann-json
-            echo "vcpkg root is here: VCPKG_INSTALLATION_ROOT"
-          elif [ "$RUNNER_OS" == "Linux" ]; then
-            sudo apt update && sudo apt install --assume-yes libcpprest-dev nlohmann-json3-dev
-          else
-            echo "$RUNNER_OS not supported"
-            exit 1
-          fi
+          conan install -if build .
 
       - name: Download Ninja and CMake
         id: cmake_and_ninja

@@ -28,7 +28,7 @@ void teckos::client::off(const std::string& event)
   eventHandlers.erase(event);
 }
 
-pplx::task<void> teckos::client::connect(const std::string& url) noexcept(false)
+pplx::task<void> teckos::client::connect(const string_t& url) noexcept(false)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   info = {url, false};
@@ -39,7 +39,7 @@ pplx::task<void> teckos::client::connect(const std::string& url) noexcept(false)
 }
 
 pplx::task<void>
-teckos::client::connect(const std::string& url, const std::string& jwt,
+teckos::client::connect(const string_t& url, const string_t& jwt,
                         const nlohmann::json& initialPayload) noexcept(false)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
@@ -63,7 +63,7 @@ pplx::task<void> teckos::client::connect()
     handleClose(close_status, reason, error);
   });
   // Connect
-  return ws->connect(U(info.url)).then([&]() {
+  return ws->connect(info.url).then([&]() {
     reconnect = false;
     connected = true;
     if(connectedHandler) {

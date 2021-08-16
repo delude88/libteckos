@@ -13,11 +13,15 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include <optional>
 
 using namespace web::websockets::client;
 using namespace pplx;
 
 namespace teckos {
+
+  typedef utility::string_t string_t;
+
   enum PacketType { EVENT = 0, ACK = 1 };
   struct packet {
     PacketType type;
@@ -29,9 +33,9 @@ namespace teckos {
     bool sendPayloadOnReconnect = false;
   };
   struct connection_info {
-    std::string url;
+    string_t url;
     bool hasJwt = false;
-    std::string jwt = {};
+    string_t jwt = {};
     nlohmann::json payload = {};
   };
 
@@ -67,10 +71,10 @@ namespace teckos {
 
     void off(const std::string& event);
 
-    pplx::task<void> connect(const std::string& url) noexcept(false);
+    pplx::task<void> connect(const string_t& url) noexcept(false);
 
     pplx::task<void>
-    connect(const std::string& url, const std::string& jwt,
+    connect(const string_t& url, const string_t& jwt,
             const nlohmann::json& initialPayload) noexcept(false);
 
     bool isConnected() const noexcept;
