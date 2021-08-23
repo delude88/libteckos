@@ -2,6 +2,24 @@
 
 #include <memory>
 
+//https://stackoverflow.com/questions/215963/how-do-you-properly-use-widechartomultibyte
+static std::string convert_to_utf8(const utility::string_t& potentiallywide)
+{
+#ifdef WIN32
+  if(potentiallywide.empty())
+    return std::string();
+  int size_needed =
+      WideCharToMultiByte(CP_UTF8, 0, &potentiallywide[0],
+                          (int)potentiallywide.size(), NULL, 0, NULL, NULL);
+  std::string strTo(size_needed, 0);
+  WideCharToMultiByte(CP_UTF8, 0, &potentiallywide[0], (int)potentiallywide.size(), &strTo[0],
+                      size_needed, NULL, NULL);
+  return strTo;
+#else
+  return potentiallywide;
+#endif
+}
+
 teckos::client::client() noexcept : reconnect(false), connected(false) {}
 
 teckos::client::~client()
@@ -71,7 +89,7 @@ pplx::task<void> teckos::client::connect()
     }
     if(info.hasJwt) {
       nlohmann::json p = info.payload;
-      p["token"] = info.jwt;
+      p["token"] = convert_to_utf8(info.jwt);
       return this->emit("token", p);
     }
     return pplx::task<void>();
