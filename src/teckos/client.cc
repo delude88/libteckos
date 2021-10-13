@@ -2,7 +2,7 @@
 
 #include <memory>
 
-//https://stackoverflow.com/questions/215963/how-do-you-properly-use-widechartomultibyte
+// https://stackoverflow.com/questions/215963/how-do-you-properly-use-widechartomultibyte
 static std::string convert_to_utf8(const utility::string_t& potentiallywide)
 {
 #ifdef WIN32
@@ -12,8 +12,9 @@ static std::string convert_to_utf8(const utility::string_t& potentiallywide)
       WideCharToMultiByte(CP_UTF8, 0, &potentiallywide[0],
                           (int)potentiallywide.size(), NULL, 0, NULL, NULL);
   std::string strTo(size_needed, 0);
-  WideCharToMultiByte(CP_UTF8, 0, &potentiallywide[0], (int)potentiallywide.size(), &strTo[0],
-                      size_needed, NULL, NULL);
+  WideCharToMultiByte(CP_UTF8, 0, &potentiallywide[0],
+                      (int)potentiallywide.size(), &strTo[0], size_needed, NULL,
+                      NULL);
   return strTo;
 #else
   return potentiallywide;
@@ -171,12 +172,17 @@ void teckos::client::handleMessage(const websocket_incoming_message& ret_msg)
     const nlohmann::json jsonData = j["data"];
     if(jsonData.is_array() && !jsonData.empty()) {
       std::vector<nlohmann::json> data = j["data"];
+      const std::string event = data[0];
+      if(event == "ready") {
+        // ready is sent by server to inform that client is connected and the
+        // token valid
+        break;
+      }
       // Inform message handler
       if(msgHandler) {
         msgHandler(data);
       }
       // Inform event handler
-      const std::string event = data[0];
       if(eventHandlers.count(event) > 0) {
         nlohmann::json payload;
         if(data.size() > 1)
@@ -185,7 +191,7 @@ void teckos::client::handleMessage(const websocket_incoming_message& ret_msg)
       }
     }
     break;
-  };
+  }
   case PacketType::ACK: {
     // type === PacketType::ACK
     // We have to call the function
@@ -194,7 +200,7 @@ void teckos::client::handleMessage(const websocket_incoming_message& ret_msg)
       acks.at(id)(j["data"].get<std::vector<nlohmann::json>>());
     }
     break;
-  };
+  }
   default: {
     std::cerr << "Warning: unknown packet type received: " << std::endl;
     break;
