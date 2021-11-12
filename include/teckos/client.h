@@ -46,15 +46,15 @@ namespace teckos {
 
     void setReconnect(bool reconnect) noexcept;
 
-    bool shouldReconnect() const noexcept;
+    [[nodiscard]] bool shouldReconnect() const noexcept;
 
     void sendPayloadOnReconnect(bool sendPayloadOnReconnect) noexcept;
 
-    bool isSendingPayloadOnReconnect() const noexcept;
+    [[maybe_unused]] [[nodiscard]] bool isSendingPayloadOnReconnect() const noexcept;
 
     void setTimeout(std::chrono::milliseconds ms) noexcept;
 
-    std::chrono::milliseconds getTimeout() const noexcept;
+    [[maybe_unused]] [[nodiscard]] std::chrono::milliseconds getTimeout() const noexcept;
 
     void on(const std::string& event,
             const std::function<void(const nlohmann::json&)>& handler);
@@ -77,7 +77,7 @@ namespace teckos {
     connect(const string_t& url, const string_t& jwt,
             const nlohmann::json& initialPayload) noexcept(false);
 
-    bool isConnected() const noexcept;
+    [[nodiscard]] bool isConnected() const noexcept;
 
     pplx::task<void> disconnect() noexcept;
 
@@ -85,13 +85,13 @@ namespace teckos {
         const std::function<void(const std::vector<nlohmann::json>&)>&
             handler) noexcept;
 
-    pplx::task<void> emit(const std::string& event) noexcept(false);
+    pplx::task<void> send(const std::string& event) noexcept(false);
 
-    pplx::task<void> emit(const std::string& event,
+    pplx::task<void> send(const std::string& event,
                           const nlohmann::json& args) noexcept(false);
 
     pplx::task<void>
-    emit(const std::string& event, const nlohmann::json& args,
+    send(const std::string& event, const nlohmann::json& args,
          const std::function<void(const std::vector<nlohmann::json>&)>&
              callback) noexcept(false);
 

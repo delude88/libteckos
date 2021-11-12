@@ -51,12 +51,12 @@ int main(int, char const*[])
     while(i < 20) {
       std::cout << "THREAD ITERATION " << i << std::endl;
       if(isReady && client->isConnected()) {
-        client->emit("no-args");
-        client->emit("hello", {"First name", "Last name"});
-        client->emit("work", {{"some", "data"}}, [](auto& result) {
+        client->send("no-args");
+        client->send("hello", {"First name", "Last name"});
+        client->send("work", {{"some", "data"}}, [](auto &result) {
           std::cout << "Got result from callback: " << result << std::endl;
         });
-        client->emit("personal");
+        client->send("personal");
       }
       i++;
       std::this_thread::sleep_for(std::chrono::seconds(2));

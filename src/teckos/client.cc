@@ -91,7 +91,7 @@ pplx::task<void> teckos::client::connect()
     if(info.hasJwt) {
       nlohmann::json p = info.payload;
       p["token"] = convert_to_utf8(info.jwt);
-      return this->emit("token", p);
+      return this->send("token", p);
     }
     return pplx::task<void>();
   });
@@ -104,7 +104,7 @@ pplx::task<void> teckos::client::disconnect() noexcept
   if(ws) {
     return ws->close();
   }
-  return pplx::task<void>();
+  return {};
 }
 
 void teckos::client::handleClose(websocket_close_status status,
@@ -216,20 +216,20 @@ void teckos::client::setMessageHandler(
   msgHandler = handler;
 }
 
-pplx::task<void> teckos::client::emit(const std::string& event)
+pplx::task<void> teckos::client::send(const std::string& event)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   return sendPackage({PacketType::EVENT, {event, {}}, std::nullopt});
 }
 
-pplx::task<void> teckos::client::emit(const std::string& event,
+pplx::task<void> teckos::client::send(const std::string& event,
                                       const nlohmann::json& args)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   return sendPackage({PacketType::EVENT, {event, args}, std::nullopt});
 }
 
-pplx::task<void> teckos::client::emit(
+pplx::task<void> teckos::client::send(
     const std::string& event, const nlohmann::json& args,
     const std::function<void(const std::vector<nlohmann::json>&)>& callback)
 {
@@ -265,7 +265,7 @@ void teckos::client::setTimeout(std::chrono::milliseconds ms) noexcept
   timeout = ms;
 }
 
-std::chrono::milliseconds teckos::client::getTimeout() const noexcept
+[[maybe_unused]] std::chrono::milliseconds teckos::client::getTimeout() const noexcept
 {
   return timeout;
 }
@@ -293,7 +293,7 @@ void teckos::client::sendPayloadOnReconnect(
   settings.sendPayloadOnReconnect = sendPayloadOnReconnect;
 }
 
-bool teckos::client::isSendingPayloadOnReconnect() const noexcept
+[[maybe_unused]] bool teckos::client::isSendingPayloadOnReconnect() const noexcept
 {
   return settings.sendPayloadOnReconnect;
 }
