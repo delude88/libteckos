@@ -37,7 +37,6 @@ if (APPLE)
 endif (APPLE)
 
 ## Prepare use of Conan
-message("Libteckos has CMAKE_MODULE_PATH as: ${CMAKE_MODULE_PATH}, but should use ${CMAKE_BINARY_DIR} to find the version conan installed!")
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
 
 find_package(nlohmann_json REQUIRED)
@@ -50,14 +49,25 @@ find_package(OpenSSL REQUIRED)
 ## create target and add include path
 ##
 add_library(teckos ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
+add_library(teckosStatic STATIC ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
 add_library(${PROJECT_NAME}::teckos ALIAS teckos)
+add_library(${PROJECT_NAME}::teckosStatic ALIAS teckosStatic)
 target_include_directories(teckos PUBLIC
         $<BUILD_INTERFACE:${INCLUDE_DIR}>
         $<INSTALL_INTERFACE:include>)
-if(CMAKE_COMPILER_IS_GNUCC)
-target_compile_options(teckos PRIVATE -Wall -Wextra -pedantic -Werror)
-endif()
+target_include_directories(teckosStatic PUBLIC
+        $<BUILD_INTERFACE:${INCLUDE_DIR}>
+        $<INSTALL_INTERFACE:include>)
+if (CMAKE_COMPILER_IS_GNUCC)
+    target_compile_options(teckos PRIVATE -Wall -Wextra -pedantic -Werror)
+    target_compile_options(teckosStatic PRIVATE -Wall -Wextra -pedantic -Werror)
+endif ()
 target_link_libraries(teckos
+        PUBLIC
+        nlohmann_json::nlohmann_json
+        OpenSSL::Crypto
+        cpprestsdk::cpprest)
+target_link_libraries(teckosStatic
         PUBLIC
         nlohmann_json::nlohmann_json
         OpenSSL::Crypto
@@ -92,11 +102,11 @@ install(
         DESTINATION ${INCLUDE_INSTALL_DIR}
 )
 export(
-        TARGETS teckos
+        TARGETS teckos teckosStatic
         NAMESPACE ${PROJECT_NAME}::
         FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
 install(
-        TARGETS teckos
+        TARGETS teckos teckosStatic
         EXPORT ${TARGETS_EXPORT_NAME}
         INCLUDES DESTINATION ${INCLUDE_INSTALL_DIR})
 install(
