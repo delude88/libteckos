@@ -1,0 +1,9 @@
+[submodule "deps/openssl-cmake"]
+	path = deps/openssl-cmake
+	url = https://github.com/viaduck/openssl-cmake.git
+[submodule "deps/boost-cmake"]
+	path = deps/boost-cmake
+	url = https://github.com/Orphis/boost-cmake.git
+[submodule "deps/cpprestsdk"]
+	path = deps/cpprestsdk
+	url = https://github.com/microsoft/cpprestsdk.git

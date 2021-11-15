@@ -26,6 +26,8 @@ set(INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Install path for include files")
 set(LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR} CACHE PATH "Install path for library files")
 
+option(TECKOS_BUILD_SOURCES "Build dependencies from sources (e.g. for MacOS Universal build)" OFF)
+
 
 ##
 ## DEPENDENCIES
@@ -39,9 +41,29 @@ endif (APPLE)
 ## Prepare use of Conan
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
 
-find_package(nlohmann_json REQUIRED)
-find_package(cpprestsdk REQUIRED)
-find_package(OpenSSL REQUIRED)
+if (TECKOS_BUILD_SOURCES)
+    # nlohmann_json::nlohmann_json
+    set(JSON_BuildTests OFF CACHE INTERNAL "")
+    include(FetchContent)
+    FetchContent_Declare(json
+            GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent
+            GIT_TAG v3.10.4)
+    FetchContent_GetProperties(json)
+    if (NOT json_POPULATED)
+        FetchContent_Populate(json)
+        add_subdirectory(${json_SOURCE_DIR} ${json_BINARY_DIR} EXCLUDE_FROM_ALL)
+    endif ()
+    # boost::*
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/deps/boost-cmake)
+    # cpprestsdk
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/deps/cpprestsdk)
+    # openssl, crypto
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/deps/openssl-cmake)
+else ()
+    find_package(cpprestsdk REQUIRED)
+    find_package(OpenSSL REQUIRED)
+    find_package(nlohmann_json REQUIRED)
+endif ()
 
 
 ##
@@ -62,16 +84,31 @@ if (CMAKE_COMPILER_IS_GNUCC)
     target_compile_options(teckos PRIVATE -Wall -Wextra -pedantic -Werror)
     target_compile_options(teckosStatic PRIVATE -Wall -Wextra -pedantic -Werror)
 endif ()
+
+if (TECKOS_BUILD_SOURCES)
+    set(TECKOS_LINK_LIBRARIES
+            Boost::system
+            Boost::thread
+            Boost::log
+            Boost::program_options
+            Boost::chrono
+            thirdparty_openssl_ssl
+            thirdparty_openssl_crypto
+            cpprest
+            )
+else ()
+    set(TECKOS_LINK_LIBRARIES
+            nlohmann_json::nlohmann_json
+            OpenSSL::Crypto
+            cpprestsdk::cpprest
+            )
+endif ()
 target_link_libraries(teckos
         PUBLIC
-        nlohmann_json::nlohmann_json
-        OpenSSL::Crypto
-        cpprestsdk::cpprest)
+        ${TECKOS_LINK_LIBRARIES})
 target_link_libraries(teckosStatic
         PUBLIC
-        nlohmann_json::nlohmann_json
-        OpenSSL::Crypto
-        cpprestsdk::cpprest)
+        ${TECKOS_LINK_LIBRARIES})
 
 add_executable(teckos-example EXCLUDE_FROM_ALL "${CMAKE_CURRENT_SOURCE_DIR}/src/cli.cc")
 set_target_properties(teckos-example PROPERTIES OUTPUT_NAME cli)
