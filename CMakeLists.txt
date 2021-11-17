@@ -33,7 +33,7 @@ if (APPLE)
     if (EXISTS "/usr/local/opt/openssl/")
         set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
     else ()
-        include("${PROJECT_SOURCE_DIR}/../cmake/BrewResolver.cmake")
+        include("${PROJECT_SOURCE_DIR}/cmake/BrewResolver.cmake")
     endif ()
 endif (APPLE)
 
