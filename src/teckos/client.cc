@@ -181,7 +181,8 @@ void teckos::client::handleMessage(const websocket_incoming_message& ret_msg)
       // Inform message handler
       if(msgHandler) {
         // Spawn a thread handling the assigned callbacks
-        //TODO: Discuss, if we should kill all threads when the destructor is called or the connection gets lost
+        /* TODO: Discuss, if we should kill all threads when the destructor is
+         * called or the connection gets lost */
         std::thread([=]() { msgHandler(data); }).detach();
       }
       // Inform event handler
@@ -189,7 +190,9 @@ void teckos::client::handleMessage(const websocket_incoming_message& ret_msg)
         nlohmann::json payload;
         if(data.size() > 1)
           payload = data[1];
-        eventHandlers[event](payload);
+        /* TODO: Discuss, if we should kill all threads when the destructor is
+         * called or the connection gets lost */
+        std::thread([=]() { eventHandlers[event](payload); }).detach();
       }
     }
     break;
