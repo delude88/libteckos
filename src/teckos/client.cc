@@ -239,7 +239,6 @@ pplx::task<void> teckos::client::send(
     const std::function<void(const std::vector<nlohmann::json>&)>& callback)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  std::cout << "teckos::send" << std::endl;
   acks[fnId] = callback;
   return sendPackage({PacketType::EVENT, {event, args}, fnId++});
 }
@@ -262,7 +261,6 @@ pplx::task<void> teckos::client::sendPackage(teckos::packet p)
     jsonMsg["id"] = *p.number;
   }
   msg.set_utf8_message(jsonMsg.dump());
-  std::cout << "teckos::sendPackage" << std::endl;
   return ws->send(msg);
 }
 
