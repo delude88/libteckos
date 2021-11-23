@@ -44,9 +44,15 @@ endif (APPLE)
 #   Dependencies
 #
 #################################################
-find_package(cpprestsdk REQUIRED)
-find_package(OpenSSL REQUIRED)
-find_package(nlohmann_json REQUIRED)
+option(TECKOS_USE_EXTERNAL_JSON "Use an external JSON library" OFF)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/websocketpp)
+if (TECKOS_USE_EXTERNAL_JSON)
+    find_package(nlohmann_json 3.2.0 REQUIRED)
+else ()
+    set(JSON_BuildTests OFF CACHE INTERNAL "")
+    set(JSON_Install ON CACHE INTERNAL "")
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/nlohmann_json)
+endif ()
 
 
 #################################################
@@ -58,6 +64,11 @@ add_library(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
 add_library(${PROJECT_NAME}Static STATIC ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 add_library(${PROJECT_NAME}::${PROJECT_NAME}Static ALIAS ${PROJECT_NAME}Static)
+
+include_directories(${PROJECT_NAME}
+        ${CMAKE_CURRENT_SOURCE_DIR}/websocketpp
+        )
+
 target_include_directories(${PROJECT_NAME} PUBLIC
         $<BUILD_INTERFACE:${INCLUDE_DIR}>
         $<INSTALL_INTERFACE:include>)
@@ -71,13 +82,11 @@ endif ()
 target_link_libraries(${PROJECT_NAME}
         PUBLIC
         nlohmann_json::nlohmann_json
-        OpenSSL::Crypto
-        cpprestsdk::cpprest)
+        websocketpp)
 target_link_libraries(${PROJECT_NAME}Static
         PUBLIC
         nlohmann_json::nlohmann_json
-        OpenSSL::Crypto
-        cpprestsdk::cpprest)
+        websocketpp)
 
 
 #################################################

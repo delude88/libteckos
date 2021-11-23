@@ -6,21 +6,27 @@
 #define TECKOSCLIENT_H_
 
 #include <chrono>
-#include <cpprest/ws_client.h>
+#include <future>
 #include <initializer_list>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <thread>
 #include <utility>
 #include <vector>
-#include <optional>
+#include <websocketpp/config/asio.hpp>
+#include <websocketpp/client.hpp>
 
-using namespace web::websockets::client;
-using namespace pplx;
+typedef websocketpp::server<websocketpp::config::asio_tls> server;
+typedef websocketpp::config::asio_client::message_type::ptr message_ptr;
 
 namespace teckos {
 
-  typedef utility::string_t string_t;
+#ifdef _WIN32
+  typedef std::wstring string_t;
+#else
+  typedef std::string string_t;
+#endif
 
   enum PacketType { EVENT = 0, ACK = 1 };
   struct packet {
@@ -50,11 +56,13 @@ namespace teckos {
 
     void sendPayloadOnReconnect(bool sendPayloadOnReconnect) noexcept;
 
-    [[maybe_unused]] [[nodiscard]] bool isSendingPayloadOnReconnect() const noexcept;
+    [[maybe_unused]] [[nodiscard]] bool
+    isSendingPayloadOnReconnect() const noexcept;
 
     void setTimeout(std::chrono::milliseconds ms) noexcept;
 
-    [[maybe_unused]] [[nodiscard]] std::chrono::milliseconds getTimeout() const noexcept;
+    [[maybe_unused]] [[nodiscard]] std::chrono::milliseconds
+    getTimeout() const noexcept;
 
     void on(const std::string& event,
             const std::function<void(const nlohmann::json&)>& handler);
@@ -71,44 +79,44 @@ namespace teckos {
 
     void off(const std::string& event);
 
-    pplx::task<void> connect(const string_t& url) noexcept(false);
+    std::future<void> connect(const string_t& url) noexcept(false);
 
-    pplx::task<void>
+    std::future<void>
     connect(const string_t& url, const string_t& jwt,
             const nlohmann::json& initialPayload) noexcept(false);
 
     [[nodiscard]] bool isConnected() const noexcept;
 
-    pplx::task<void> disconnect() noexcept;
+    std::future<void> disconnect() noexcept;
 
     void setMessageHandler(
         const std::function<void(const std::vector<nlohmann::json>&)>&
             handler) noexcept;
 
-    pplx::task<void> send(const std::string& event) noexcept(false);
+    std::future<void> send(const std::string& event) noexcept(false);
 
-    pplx::task<void> send(const std::string& event,
-                          const nlohmann::json& args) noexcept(false);
+    std::future<void> send(const std::string& event,
+                           const nlohmann::json& args) noexcept(false);
 
-    pplx::task<void>
+    std::future<void>
     send(const std::string& event, const nlohmann::json& args,
          const std::function<void(const std::vector<nlohmann::json>&)>&
              callback) noexcept(false);
 
   protected:
-    pplx::task<void> connect();
+    std::future<void> connect();
 
     void reconnectionService();
 
-    void handleClose(websocket_close_status close_status,
-                     const utility::string_t& reason,
+    void handleClose(websocketpp::websocket_close_status close_status,
+                     const teckos::string_t& reason,
                      const std::error_code& error);
 
-    void handleMessage(const websocket_incoming_message& ret_msg);
+    void handleMessage(client* c, websocketpp::connection_hdl hdl, websocketpp::message_ptr msg);
 
-    pplx::task<void> send(const nlohmann::json& args) noexcept(false);
+    std::future<void> send(const nlohmann::json& args) noexcept(false);
 
-    pplx::task<void> sendPackage(packet p) noexcept(false);
+    std::future<void> sendPackage(packet p) noexcept(false);
 
   private:
     std::chrono::milliseconds timeout = std::chrono::milliseconds(500);
@@ -123,7 +131,7 @@ namespace teckos {
     uint32_t fnId = 0;
     std::map<uint32_t, std::function<void(const std::vector<nlohmann::json>&)>>
         acks;
-    std::shared_ptr<websocket_callback_client> ws;
+    std::shared_ptr<websocketpp::client> ws;
     std::unique_ptr<std::thread> reconnectionThread;
     bool reconnect;
     bool connected;
