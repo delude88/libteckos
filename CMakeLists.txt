@@ -21,7 +21,7 @@ project(teckos
 #
 #################################################
 include(GNUInstallDirs)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
@@ -44,14 +44,16 @@ endif (APPLE)
 #   Dependencies
 #
 #################################################
+set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
+set(BUILD_SHARED_LIBS ON CACHE BOOL "Don't use static libs" FORCE)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
 option(TECKOS_USE_EXTERNAL_JSON "Use an external JSON library" OFF)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/websocketpp)
 if (TECKOS_USE_EXTERNAL_JSON)
     find_package(nlohmann_json 3.2.0 REQUIRED)
 else ()
     set(JSON_BuildTests OFF CACHE INTERNAL "")
     set(JSON_Install ON CACHE INTERNAL "")
-    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/nlohmann_json)
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/nlohmann_json EXCLUDE_FROM_ALL)
 endif ()
 
 
@@ -64,11 +66,6 @@ add_library(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
 add_library(${PROJECT_NAME}Static STATIC ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 add_library(${PROJECT_NAME}::${PROJECT_NAME}Static ALIAS ${PROJECT_NAME}Static)
-
-include_directories(${PROJECT_NAME}
-        ${CMAKE_CURRENT_SOURCE_DIR}/websocketpp
-        )
-
 target_include_directories(${PROJECT_NAME} PUBLIC
         $<BUILD_INTERFACE:${INCLUDE_DIR}>
         $<INSTALL_INTERFACE:include>)
@@ -82,11 +79,11 @@ endif ()
 target_link_libraries(${PROJECT_NAME}
         PUBLIC
         nlohmann_json::nlohmann_json
-        websocketpp)
+        ixwebsocket)
 target_link_libraries(${PROJECT_NAME}Static
         PUBLIC
         nlohmann_json::nlohmann_json
-        websocketpp)
+        ixwebsocket)
 
 
 #################################################
@@ -124,11 +121,11 @@ install(
         DESTINATION ${INCLUDE_INSTALL_DIR}
 )
 export(
-        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
+        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static ixwebsocket
         NAMESPACE ${PROJECT_NAME}::
         FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
 install(
-        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
+        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static ixwebsocket
         EXPORT ${TARGETS_EXPORT_NAME}
         INCLUDES DESTINATION ${INCLUDE_INSTALL_DIR})
 install(

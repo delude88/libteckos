@@ -1,6 +1,6 @@
-[submodule "websocketpp"]
-	path = websocketpp
-	url = https://github.com/zaphoyd/websocketpp.git
 [submodule "json"]
 	path = nlohmann_json
 	url = https://github.com/nlohmann/json.git
+[submodule "IXWebSocket"]
+	path = IXWebSocket
+	url = https://github.com/machinezone/IXWebSocket.git

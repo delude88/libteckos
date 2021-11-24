@@ -1,27 +1,10 @@
 #include "teckos/client.h"
-
 #include <memory>
 
-// https://stackoverflow.com/questions/215963/how-do-you-properly-use-widechartomultibyte
-static std::string convert_to_utf8(const utility::string_t& potentiallywide)
+teckos::client::client() noexcept : reconnect(false), connected(false)
 {
-#ifdef WIN32
-  if(potentiallywide.empty())
-    return std::string();
-  int size_needed =
-      WideCharToMultiByte(CP_UTF8, 0, &potentiallywide[0],
-                          (int)potentiallywide.size(), NULL, 0, NULL, NULL);
-  std::string strTo(size_needed, 0);
-  WideCharToMultiByte(CP_UTF8, 0, &potentiallywide[0],
-                      (int)potentiallywide.size(), &strTo[0], size_needed, NULL,
-                      NULL);
-  return strTo;
-#else
-  return potentiallywide;
-#endif
+  ix::initNetSystem();
 }
-
-teckos::client::client() noexcept : reconnect(false), connected(false) {}
 
 teckos::client::~client()
 {
@@ -47,72 +30,91 @@ void teckos::client::off(const std::string& event)
   eventHandlers.erase(event);
 }
 
-pplx::task<void> teckos::client::connect(const string_t& url) noexcept(false)
+void teckos::client::connect(const std::string& url) noexcept(false)
 {
+  std::cout << "teckos::client::connect(const std::string& url)" << std::endl;
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  info = {url, false};
+  info = {url, false, "", ""};
   if(connected) {
-    return disconnect().then([&]() { return connect(); });
+    disconnect();
   }
-  return connect();
+  connect();
 }
 
-pplx::task<void>
-teckos::client::connect(const string_t& url, const string_t& jwt,
-                        const nlohmann::json& initialPayload) noexcept(false)
+void teckos::client::connect(
+    const std::string& url, const std::string& jwt,
+    const nlohmann::json& initialPayload) noexcept(false)
 {
+  std::cout << "teckos::client::connect(const std::string& url, const "
+               "std::string& jwt, const nlohmann::json& initialPayload)"
+            << std::endl;
   std::lock_guard<std::recursive_mutex> lock(mutex);
   info = {url, true, jwt, initialPayload};
   if(connected) {
-    return disconnect().then([&]() { return connect(); });
+    disconnect();
   }
   return connect();
 }
 
-pplx::task<void> teckos::client::connect()
+void teckos::client::connect()
 {
+  std::cout << "teckos::client::connect()" << std::endl;
   // Create new websocket client and attach handler
-  ws = std::make_shared<websocket_callback_client>();
-  ws->set_message_handler([&](const websocket_incoming_message& ret_msg) {
-    handleMessage(ret_msg);
-  });
-  ws->set_close_handler([&](websocket_close_status close_status,
-                            const utility::string_t& reason,
-                            const std::error_code& error) {
-    handleClose(close_status, reason, error);
+  ws.reset(new ix::WebSocket());
+  ws->enablePong();
+  ws->setUrl(info.url);
+  std::cout << info.url << std::endl;
+
+  ws->setOnMessageCallback([this](const ix::WebSocketMessagePtr& msg) {
+    switch(msg->type) {
+    case ix::WebSocketMessageType::Message:
+      handleMessage(msg);
+      break;
+    case ix::WebSocketMessageType::Close:
+      handleClose(msg);
+      break;
+    case ix::WebSocketMessageType::Open:
+      reconnect = false;
+      connected = true;
+      if(connectedHandler) {
+        connectedHandler();
+      }
+      if(info.hasJwt) {
+        nlohmann::json p = info.payload;
+        p["token"] = info.jwt;
+        return this->send("token", p);
+      }
+      break;
+    case ix::WebSocketMessageType::Error:
+      std::cerr << msg->errorInfo.reason << std::endl;
+      break;
+    case ix::WebSocketMessageType::Ping:
+      break;
+    case ix::WebSocketMessageType::Pong:
+      break;
+    case ix::WebSocketMessageType::Fragment:
+      break;
+    }
   });
   // Connect
-  return ws->connect(info.url).then([&]() {
-    reconnect = false;
-    connected = true;
-    if(connectedHandler) {
-      connectedHandler();
-    }
-    if(info.hasJwt) {
-      nlohmann::json p = info.payload;
-      p["token"] = convert_to_utf8(info.jwt);
-      return this->send("token", p);
-    }
-    return pplx::task<void>();
-  });
+  ws->start();
 }
 
-pplx::task<void> teckos::client::disconnect() noexcept
+void teckos::client::disconnect() noexcept
 {
+  std::cout << "teckos::client::disconnect" << std::endl;
   std::lock_guard<std::recursive_mutex> lock(mutex);
   reconnect = false;
   if(ws) {
-    return ws->close();
+    return ws->close(1000, "Normal Closure");
   }
-  return {};
 }
 
-void teckos::client::handleClose(websocket_close_status status,
-                                 const utility::string_t&,
-                                 const std::error_code&)
+void teckos::client::handleClose(const ix::WebSocketMessagePtr& msg)
 {
   connected = false;
-  if(status != websocket_close_status::normal) {
+
+  if(msg->closeInfo.code != 1000) {
     // Abnormal close, reconnect may be appropriate
     if(disconnectedHandler) {
       disconnectedHandler(false);
@@ -123,8 +125,8 @@ void teckos::client::handleClose(websocket_close_status status,
       if(reconnectionThread) {
         reconnectionThread->join();
       }
-      reconnectionThread = std::make_unique<std::thread>(
-          &teckos::client::reconnectionService, this);
+      reconnectionThread.reset(
+          new std::thread(&teckos::client::reconnectionService, this));
     }
   } else {
     if(disconnectedHandler) {
@@ -143,12 +145,13 @@ void teckos::client::reconnectionService()
     try {
       if(info.hasJwt) {
         if(settings.sendPayloadOnReconnect) {
-          connect(info.url, info.jwt, info.payload).wait();
+          // TODO: Do we need to wait for the connect?
+          connect(info.url, info.jwt, info.payload);
         } else {
-          connect(info.url, info.jwt, {}).wait();
+          connect(info.url, info.jwt, {});
         }
       } else {
-        connect(info.url).wait();
+        connect(info.url);
       }
       if(reconnectedHandler) {
         reconnectedHandler();
@@ -160,9 +163,9 @@ void teckos::client::reconnectionService()
   }
 }
 
-void teckos::client::handleMessage(const websocket_incoming_message& ret_msg)
+void teckos::client::handleMessage(const ix::WebSocketMessagePtr& msg)
 {
-  auto ret_str = ret_msg.extract_string().get();
+  auto ret_str = msg->str;
   if(ret_str == "hey")
     return;
   nlohmann::json j = nlohmann::json::parse(ret_str);
@@ -221,20 +224,21 @@ void teckos::client::setMessageHandler(
   msgHandler = handler;
 }
 
-pplx::task<void> teckos::client::send(const std::string& event)
+void teckos::client::send(const std::string& event)
 {
+  std::cout << "teckos::client::send(" << event << ")" << std::endl;
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  return sendPackage({PacketType::EVENT, {event, {}}, std::nullopt});
+  return sendPackage({PacketType::EVENT, {event, {}}, nullopt});
 }
 
-pplx::task<void> teckos::client::send(const std::string& event,
-                                      const nlohmann::json& args)
+void teckos::client::send(const std::string& event, const nlohmann::json& args)
 {
+  std::cout << "teckos::client::send(" << event << ", " << args.dump() << ")" << std::endl;
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  return sendPackage({PacketType::EVENT, {event, args}, std::nullopt});
+  return sendPackage({PacketType::EVENT, {event, args}, nullopt});
 }
 
-pplx::task<void> teckos::client::send(
+void teckos::client::send(
     const std::string& event, const nlohmann::json& args,
     const std::function<void(const std::vector<nlohmann::json>&)>& callback)
 {
@@ -243,25 +247,24 @@ pplx::task<void> teckos::client::send(
   return sendPackage({PacketType::EVENT, {event, args}, fnId++});
 }
 
-pplx::task<void> teckos::client::send(const nlohmann::json& args)
+void teckos::client::send_json(const nlohmann::json& args)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  return sendPackage({PacketType::EVENT, args, std::nullopt});
+  return sendPackage({PacketType::EVENT, args, nullopt});
 }
 
-pplx::task<void> teckos::client::sendPackage(teckos::packet p)
+void teckos::client::sendPackage(teckos::packet p)
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   if(!connected) {
     throw std::runtime_error("Not connected");
   }
-  websocket_outgoing_message msg;
   nlohmann::json jsonMsg = {{"type", p.type}, {"data", p.data}};
   if(p.number) {
     jsonMsg["id"] = *p.number;
   }
-  msg.set_utf8_message(jsonMsg.dump());
-  return ws->send(msg);
+  std::cout << "ws->send(" << jsonMsg.dump() << ")" << std::endl;
+  ws->send(jsonMsg.dump());
 }
 
 void teckos::client::setTimeout(std::chrono::milliseconds ms) noexcept
