@@ -41,16 +41,28 @@ endif (APPLE)
 
 #################################################
 #
+#   Environment
+#
+#################################################
+option(USE_IX_WEBSOCKET "Use ixwebsocket instead of cpprestsdk" OFF)
+
+
+#################################################
+#
 #   Dependencies
 #
 #################################################
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake OPTIONAL)
-if(COMMAND conan_basic_setup)
+if (COMMAND conan_basic_setup)
     conan_basic_setup()
-endif()
-set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
-set(BUILD_SHARED_LIBS ON CACHE BOOL "Don't use static libs" FORCE)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
+endif ()
+if (USE_IX_WEBSOCKET)
+    set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
+    set(BUILD_SHARED_LIBS ON CACHE BOOL "Don't use static libs" FORCE)
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
+else ()
+    find_package(cpprestsdk REQUIRED)
+endif ()
 option(TECKOS_USE_EXTERNAL_JSON "Use an external JSON library" OFF)
 if (TECKOS_USE_EXTERNAL_JSON)
     find_package(nlohmann_json 3.2.0 REQUIRED)
@@ -80,14 +92,29 @@ if (CMAKE_COMPILER_IS_GNUCC)
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -Werror)
     target_compile_options(${PROJECT_NAME}Static PRIVATE -Wall -Wextra -pedantic -Werror)
 endif ()
-target_link_libraries(${PROJECT_NAME}
-        PUBLIC
-        nlohmann_json::nlohmann_json
-        ixwebsocket)
-target_link_libraries(${PROJECT_NAME}Static
-        PUBLIC
-        nlohmann_json::nlohmann_json
-        ixwebsocket)
+
+if (USE_IX_WEBSOCKET)
+    target_compile_definitions(${PROJECT_NAME}
+            PRIVATE
+            USE_IX_WEBSOCKET)
+    target_link_libraries(${PROJECT_NAME}
+            PUBLIC
+            nlohmann_json::nlohmann_json
+            IXWebSocket)
+    target_link_libraries(${PROJECT_NAME}Static
+            PUBLIC
+            nlohmann_json::nlohmann_json
+            IXWebSocket)
+else ()
+    target_link_libraries(${PROJECT_NAME}
+            PUBLIC
+            nlohmann_json::nlohmann_json
+            cpprestsdk::cpprest)
+    target_link_libraries(${PROJECT_NAME}Static
+            PUBLIC
+            nlohmann_json::nlohmann_json
+            cpprestsdk::cpprest)
+endif ()
 
 
 #################################################
@@ -125,11 +152,11 @@ install(
         DESTINATION ${INCLUDE_INSTALL_DIR}
 )
 export(
-        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static ixwebsocket
+        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
         NAMESPACE ${PROJECT_NAME}::
         FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
 install(
-        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static ixwebsocket
+        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
         EXPORT ${TARGETS_EXPORT_NAME}
         INCLUDES DESTINATION ${INCLUDE_INSTALL_DIR})
 install(

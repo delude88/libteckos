@@ -9,9 +9,6 @@
 #include <future>
 #include <initializer_list>
 #include <iostream>
-#include <ixwebsocket/IXNetSystem.h>
-#include <ixwebsocket/IXUserAgent.h>
-#include <ixwebsocket/IXWebSocket.h>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <thread>
@@ -19,6 +16,17 @@
 #include <vector>
 #include <future>
 #include <optional>
+
+#ifdef USE_IX_WEBSOCKET
+#include <ixwebsocket/IXNetSystem.h>
+#include <ixwebsocket/IXUserAgent.h>
+#include <ixwebsocket/IXWebSocket.h>
+typedef ix::WebSocket WebSocketClient;
+#else
+#include <cpprest/ws_client.h>
+using namespace web::websockets::client;
+typedef websocket_callback_client WebSocketClient;
+#endif
 
 namespace teckos {
 
@@ -44,23 +52,20 @@ typedef std::function<void(Result)> Callback;
 
 class client {
  public:
-
   client(bool async_events = false) noexcept;
   ~client();
 
   void setReconnect(bool reconnect) noexcept;
 
-  [[nodiscard]] bool shouldReconnect() const noexcept;
+  bool shouldReconnect() const noexcept;
 
   void sendPayloadOnReconnect(bool sendPayloadOnReconnect) noexcept;
 
-  [[maybe_unused]] [[nodiscard]] bool
-  isSendingPayloadOnReconnect() const noexcept;
+  bool isSendingPayloadOnReconnect() const noexcept;
 
   void setTimeout(std::chrono::milliseconds ms) noexcept;
 
-  [[maybe_unused]] [[nodiscard]] std::chrono::milliseconds
-  getTimeout() const noexcept;
+  std::chrono::milliseconds getTimeout() const noexcept;
 
   void on(const std::string &event,
           const std::function<void(const nlohmann::json &)> &handler);
@@ -81,7 +86,7 @@ class client {
   void connect(const std::string &url, const std::string &jwt,
                const nlohmann::json &initialPayload) noexcept(false);
 
-  [[nodiscard]] bool isConnected() const noexcept;
+  bool isConnected() const noexcept;
 
   void disconnect() noexcept;
 
@@ -100,9 +105,9 @@ class client {
  protected:
   void connect();
 
-  void handleClose(const ix::WebSocketMessagePtr &msg);
+  void handleClose(int code, const std::string &reason);
 
-  void handleMessage(const ix::WebSocketMessagePtr &msg);
+  void handleMessage(const std::string &msg);
 
   void send_json(const nlohmann::json &args) noexcept(false);
 
@@ -120,7 +125,7 @@ class client {
   uint32_t fnId = 0;
   std::map<uint32_t, Callback>
       acks;
-  std::shared_ptr<ix::WebSocket> ws;
+  std::shared_ptr<WebSocketClient> ws;
   bool reconnecting;
   bool connected;
   bool authenticated;
