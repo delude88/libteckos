@@ -45,7 +45,7 @@ jobs:
       - name: Install Dependencies with Conan (Ubuntu gcc)
         if: ${{ matrix.config.os == 'ubuntu-latest' }}
         run: |
-          sudo apt-get install libssl-dev libsrtp2-dev
+          sudo apt-get install libssl-dev
           conan profile new default --detect
           conan profile update settings.compiler.libcxx=libstdc++11 default
           conan install -if build .

@@ -62,15 +62,10 @@ endif ()
 #   Library artifact
 #
 #################################################
-option(TECKOS_ASYNC_EVENTS "Let events spawn in separate threads instead of the message thread" OFF)
 add_library(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
 add_library(${PROJECT_NAME}Static STATIC ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 add_library(${PROJECT_NAME}::${PROJECT_NAME}Static ALIAS ${PROJECT_NAME}Static)
-if (TECKOS_ASYNC_EVENTS)
-    #target_compile_definitions(${PROJECT_NAME} PRIVATE USE_ASYNC_EVENTS)
-    #target_compile_definitions(${PROJECT_NAME}Static PRIVATE USE_ASYNC_EVENTS)
-endif (TECKOS_ASYNC_EVENTS)
 target_include_directories(${PROJECT_NAME} PUBLIC
         $<BUILD_INTERFACE:${INCLUDE_DIR}>
         $<INSTALL_INTERFACE:include>)
