@@ -33,22 +33,21 @@ jobs:
       #  run: git fetch --unshallow --tags
       - name: Checkout Submodules
         run: git submodule update --init --recursive
-      - name: Download Conan package manager
+      - name: Install dependencies using conan (windows only)
+        if: ${{ matrix.config.os != 'windows-latest' }}
         run: |
           pip3 install wheel setuptools
           pip3 install conan
           conan --version
-      - name: Install Dependencies with Conan
-        if: ${{ matrix.config.os != 'ubuntu-latest' }}
-        run: |
-          conan install -if build .
-      - name: Install Dependencies with Conan (Ubuntu gcc)
+          conan install -if build --build=missing .
+      - name: Install dependencies using apt (linux)
         if: ${{ matrix.config.os == 'ubuntu-latest' }}
         run: |
-          sudo apt-get install libssl-dev
-          conan profile new default --detect
-          conan profile update settings.compiler.libcxx=libstdc++11 default
-          conan install -if build .
+          sudo apt-get install libssl-dev libdeflate-dev
+      - name: Install dependencies using brew (macos)
+        if: ${{ matrix.config.os == 'macos-latest' }}
+        run: |
+          brew install libdeflate openssl
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config.build_type }}
       - name: Build with CMake
