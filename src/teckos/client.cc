@@ -1,21 +1,18 @@
 #include "teckos/client.h"
 #include <memory>
 #include <iostream>
-#include <future>
 
-teckos::client::client() noexcept: reconnecting(false), connected(false) {
-#ifdef TECKOS_TRACE
-  std::cout << "teckos::client::client()" << std::endl;
-#endif
+teckos::client::client(bool async_events) noexcept: reconnecting(false), connected(false), async_events(async_events) {
   ix::initNetSystem();
   ws.reset(new ix::WebSocket());
   ws->enablePong();
 }
 
 teckos::client::~client() {
-#ifdef TECKOS_TRACE
-  std::cout << "teckos::client::~client()" << std::endl;
-#endif
+  for (auto &item: threadPool) {
+    if (item.joinable())
+      item.join();
+  }
   disconnect();
 }
 
@@ -31,9 +28,6 @@ void teckos::client::off(const std::string &event) {
 }
 
 void teckos::client::connect(const std::string &url) noexcept(false) {
-#ifdef TECKOS_TRACE
-  std::cout << "teckos::client::connect(const std::string& url)" << std::endl;
-#endif
   std::lock_guard<std::recursive_mutex> lock(mutex);
   info = {url, false, "", ""};
   if (connected) {
@@ -45,11 +39,6 @@ void teckos::client::connect(const std::string &url) noexcept(false) {
 void teckos::client::connect(
     const std::string &url, const std::string &jwt,
     const nlohmann::json &initialPayload) noexcept(false) {
-#ifdef TECKOS_TRACE
-  std::cout << "teckos::client::connect(const std::string& url, const "
-               "std::string& jwt, const nlohmann::json& initialPayload)"
-            << std::endl;
-#endif
   std::lock_guard<std::recursive_mutex> lock(mutex);
   info = {url, true, jwt, initialPayload};
   if (connected) {
@@ -59,10 +48,6 @@ void teckos::client::connect(
 }
 
 void teckos::client::connect() {
-#ifdef TECKOS_TRACE
-  std::cout << "teckos::client::connect() to " << info.url << std::endl;
-  std::cout << info.url << std::endl;
-#endif
   // Create new websocket client and attach handler
   ws->setUrl(info.url);
 
@@ -70,42 +55,49 @@ void teckos::client::connect() {
     switch (msg->type) {
       case ix::WebSocketMessageType::Message: {
         if (connected) {
-#ifdef TECKOS_TRACE
-          std::cout << "teckos::client::setOnMessageCallback(Message)" << std::endl;
-#endif
           handleMessage(msg);
         }
         break;
       }
       case ix::WebSocketMessageType::Close: {
-#ifdef TECKOS_TRACE
-        std::cout << "teckos::client::setOnMessageCallback(Close)" << std::endl;
-#endif
         handleClose(msg);
         break;
       }
       case ix::WebSocketMessageType::Open: {
-#ifdef TECKOS_TRACE
-        std::cout << "teckos::client::setOnMessageCallback(Open)" << std::endl;
-#endif
         connected = true;
-        if (reconnecting && reconnectedHandler) {
-          reconnectedHandler();
-        } else if (connectedHandler) {
-          connectedHandler();
-        }
-        reconnecting = false;
         if (info.hasJwt) {
+          // Not connected without the jwt being validated
           nlohmann::json p = info.payload;
           p["token"] = info.jwt;
           return this->send("token", p);
+        } else {
+          authenticated = true;
+          // Without jwt we are connected now
+          if (reconnecting) {
+            if (reconnectedHandler) {
+              if (async_events) {
+                threadPool.emplace_back([this]() {
+                  reconnectedHandler();
+                });
+              } else {
+                reconnectedHandler();
+              }
+            }
+          } else {
+            if (connectedHandler) {
+              if (async_events) {
+                threadPool.emplace_back([this]() {
+                  connectedHandler();
+                });
+              } else {
+                connectedHandler();
+              }
+            }
+          }
         }
         break;
       }
       case ix::WebSocketMessageType::Error: {
-#ifdef TECKOS_TRACE
-        std::cout << "teckos::client::setOnMessageCallback(Error)" << std::endl;
-#endif
         std::cerr << msg->errorInfo.reason << std::endl;
         break;
       }
@@ -115,17 +107,18 @@ void teckos::client::connect() {
     }
   });
   // Connect
-  //TODO: Prefer automatic reconnection of ixwebsocket
-  ws->disableAutomaticReconnection();
+  if (settings.reconnect) {
+    ws->enableAutomaticReconnection();
+  } else {
+    ws->disableAutomaticReconnection();
+  }
+  connected = false;
+  authenticated = false;
   ws->start();
 }
 
 void teckos::client::disconnect() noexcept {
-#ifdef TECKOS_TRACE
-  std::cout << "teckos::client::disconnect" << std::endl;
-#endif
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  connected = false;
   try {
     ws->stop(1000, "Normal Closure");
   } catch (std::exception exception) {
@@ -134,53 +127,26 @@ void teckos::client::disconnect() noexcept {
 }
 
 void teckos::client::handleClose(const ix::WebSocketMessagePtr &msg) {
-#ifdef TECKOS_TRACE
-  std::cout << "teckos::client::handleClose" << std::endl;
-#endif
-
-  if (msg->closeInfo.code != 1000) {
-    // Abnormal close, reconnect may be appropriate
-    if (disconnectedHandler) {
-#ifdef TECKOS_TRACE
-      std::cout << "teckos::client::handleClose::disconnectedHandler(false)" << std::endl;
-#endif
-      //disconnectedHandler(false);
-      std::thread([=]() { disconnectedHandler(false); }).detach();
-      //std::async(std::launch::deferred, [=] { disconnectedHandler(false); });
-    }
-    if (settings.reconnect) {
-#ifdef TECKOS_TRACE
-      std::cout << "teckos::client::handleClose::reconneting..." << std::endl;#
-#endif
-      reconnecting = true;
-      if (reconnectingHandler) {
-        //reconnectingHandler();
-        std::thread([=]() { reconnectingHandler(); }).detach();
-        //std::async(std::launch::deferred, [=] { reconnectingHandler(); });
-      }
-      if (info.hasJwt) {
-        if (settings.sendPayloadOnReconnect) {
-          connect(info.url, info.jwt, info.payload);
-        } else {
-          connect(info.url, info.jwt, {});
-        }
-      } else {
-        connect(info.url);
-      }
-    }
-  } else {
-    if (disconnectedHandler) {
-#ifdef TECKOS_TRACE
-      std::cout << "teckos::client::handleClose::disconnectedHandler(true)" << std::endl;
-#endif
-      //disconnectedHandler(true);
-      std::thread([=]() { disconnectedHandler(true); }).detach();
-      //std::async(std::launch::deferred, [=] { disconnectedHandler(true); });
+  connected = false;
+  authenticated = false;
+  auto abnormal_exit = msg->closeInfo.code != 1000;
+  if (abnormal_exit && settings.reconnect) {
+    reconnecting = true;
+  }
+  if (disconnectedHandler) {
+    if (async_events) {
+      threadPool.emplace_back([this, abnormal_exit]() {
+        disconnectedHandler(std::move(abnormal_exit));
+      });
+    } else {
+      disconnectedHandler(abnormal_exit);
     }
   }
 }
 
 void teckos::client::handleMessage(const ix::WebSocketMessagePtr &msg) {
+  std::cerr << msg->str << std::endl;
+
   auto ret_str = msg->str;
   if (ret_str == "hey")
     return;
@@ -195,23 +161,53 @@ void teckos::client::handleMessage(const ix::WebSocketMessagePtr &msg) {
         if (event == "ready") {
           // ready is sent by server to inform that client is connected and the
           // token valid
+          authenticated = true;
+          if (reconnecting) {
+            if (reconnectedHandler) {
+              if (async_events) {
+                threadPool.emplace_back([this]() {
+                  reconnectedHandler();
+                });
+              } else {
+                reconnectedHandler();
+              }
+            }
+          } else {
+            if (connectedHandler) {
+              if (async_events) {
+                threadPool.emplace_back([this]() {
+                  connectedHandler();
+                });
+              } else {
+                connectedHandler();
+              }
+            }
+          }
           break;
         }
         // Inform message handler
         if (msgHandler) {
           // Spawn a thread handling the assigned callbacks
-          //msgHandler(data);
-          std::thread([=]() { msgHandler(data); }).detach();
-          //std::async(std::launch::deferred, [=] { msgHandler(data); });
+          if (async_events) {
+            threadPool.emplace_back([this, data]() {
+              msgHandler(std::move(data));
+            });
+          } else {
+            msgHandler(data);
+          }
         }
         // Inform event handler
         if (eventHandlers.count(event) > 0) {
           nlohmann::json payload;
           if (data.size() > 1)
             payload = data[1];
-          //eventHandlers[event](payload);
-          std::thread([=]() { eventHandlers[event](payload); }).detach();
-          //std::async(std::launch::deferred, [=] { eventHandlers[event](payload); });
+          if (async_events) {
+            threadPool.emplace_back([this, &event, &payload]() {
+              eventHandlers[event](payload);
+            });
+          } else {
+            eventHandlers[event](payload);
+          }
         }
       }
       break;
@@ -221,7 +217,8 @@ void teckos::client::handleMessage(const ix::WebSocketMessagePtr &msg) {
       // We have to call the function
       const int32_t id = j["id"];
       if (acks.count(id) > 0) {
-        acks.at(id)(j["data"].get<std::vector<nlohmann::json>>());
+        acks[id](j["data"].get<std::vector<nlohmann::json>>());
+        acks.erase(id);
       }
       break;
     }
@@ -240,26 +237,29 @@ void teckos::client::setMessageHandler(
 }
 
 void teckos::client::send(const std::string &event) {
-#ifdef TECKOS_TRACE
-  std::cout << "teckos::client::send(" << event << ")" << std::endl;
-#endif
   std::lock_guard<std::recursive_mutex> lock(mutex);
+  if (!connected && !authenticated && event != "token") {
+    throw std::runtime_error("Not connected");
+  }
   return sendPackage({PacketType::EVENT, {event, {}}, std::nullopt});
 }
 
 void teckos::client::send(const std::string &event, const nlohmann::json &args) {
-#ifdef TECKOS_TRACE
-  std::cout << "teckos::client::send(" << event << ", " << args.dump() << ")" << std::endl;
-#endif
   std::lock_guard<std::recursive_mutex> lock(mutex);
+  if (!connected && !authenticated && event != "token") {
+    throw std::runtime_error("Not connected");
+  }
   return sendPackage({PacketType::EVENT, {event, args}, std::nullopt});
 }
 
 void teckos::client::send(
     const std::string &event, const nlohmann::json &args,
-    const std::function<void(const std::vector<nlohmann::json> &)> &callback) {
+    Callback callback) {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  acks[fnId] = callback;
+  if (!connected && !authenticated && event != "token") {
+    throw std::runtime_error("Not connected");
+  }
+  acks.insert({fnId, std::move(callback)});
   return sendPackage({PacketType::EVENT, {event, args}, fnId++});
 }
 
@@ -270,16 +270,10 @@ void teckos::client::send_json(const nlohmann::json &args) {
 
 void teckos::client::sendPackage(teckos::packet p) {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  if (!connected) {
-    throw std::runtime_error("Not connected");
-  }
   nlohmann::json jsonMsg = {{"type", p.type}, {"data", p.data}};
   if (p.number) {
     jsonMsg["id"] = *p.number;
   }
-#ifdef TECKOS_TRACE
-  std::cout << "ws->send(" << jsonMsg.dump() << ")" << std::endl;
-#endif
   ws->send(jsonMsg.dump());
 }
 
@@ -294,7 +288,7 @@ teckos::client::getTimeout() const noexcept {
 }
 
 bool teckos::client::isConnected() const noexcept {
-  return connected;
+  return connected && authenticated;
 }
 
 void teckos::client::setReconnect(bool shallReconnect) noexcept {
@@ -326,12 +320,6 @@ void teckos::client::on_reconnected(
     const std::function<void()> &handler) noexcept {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   reconnectedHandler = handler;
-}
-
-void teckos::client::on_reconnecting(
-    const std::function<void()> &handler) noexcept {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
-  reconnectingHandler = handler;
 }
 
 void teckos::client::on_disconnected(
