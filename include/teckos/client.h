@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 #include <future>
+#include <optional>
 
 namespace teckos {
 
