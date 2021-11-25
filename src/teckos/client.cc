@@ -145,8 +145,6 @@ void teckos::client::handleClose(const ix::WebSocketMessagePtr &msg) {
 }
 
 void teckos::client::handleMessage(const ix::WebSocketMessagePtr &msg) {
-  std::cerr << msg->str << std::endl;
-
   auto ret_str = msg->str;
   if (ret_str == "hey")
     return;
