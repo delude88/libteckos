@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          - submodules: "recursive"
+          submodules: "recursive"
       - name: Install Dependencies with Conan
         if: ${{ matrix.config.os != 'ubuntu-latest' }}
         run: |
