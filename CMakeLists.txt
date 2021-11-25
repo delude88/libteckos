@@ -44,6 +44,10 @@ endif (APPLE)
 #   Dependencies
 #
 #################################################
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake OPTIONAL)
+if(COMMAND conan_basic_setup)
+    conan_basic_setup()
+endif()
 set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Don't use static libs" FORCE)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
