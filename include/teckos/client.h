@@ -5,7 +5,6 @@
 #ifndef TECKOSCLIENT_H_
 #define TECKOSCLIENT_H_
 
-#include "optional.hpp"
 #include <chrono>
 #include <future>
 #include <initializer_list>
@@ -25,7 +24,7 @@ namespace teckos {
   struct packet {
     PacketType type;
     nlohmann::json data;
-    optional<uint32_t> number;
+    std::optional<uint32_t> number;
   };
   struct connection_settings {
     bool reconnect = false;
@@ -97,8 +96,6 @@ namespace teckos {
   protected:
     void connect();
 
-    void reconnectionService();
-
     void handleClose(const ix::WebSocketMessagePtr& msg);
 
     void handleMessage(const ix::WebSocketMessagePtr& msg);
@@ -120,9 +117,8 @@ namespace teckos {
     uint32_t fnId = 0;
     std::map<uint32_t, std::function<void(const std::vector<nlohmann::json>&)>>
         acks;
-    std::unique_ptr<ix::WebSocket> ws;
-    std::unique_ptr<std::thread> reconnectionThread;
-    bool reconnect;
+    std::shared_ptr<ix::WebSocket> ws;
+    bool reconnecting;
     bool connected;
     connection_settings settings;
     connection_info info;
