@@ -33,7 +33,8 @@ jobs:
           submodules: "recursive"
       - name: Download Conan package manager
         run: |
-          pip3 install conan wheel setuptools
+          pip3 install wheel setuptools
+          pip3 install conan
       - name: Install Dependencies with Conan
         if: ${{ matrix.config.os != 'ubuntu-latest' }}
         run: |
