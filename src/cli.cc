@@ -33,9 +33,6 @@ int main(int, char const*[])
     client->on_disconnected([](bool normal){
       std::cout << "Disconnected, " << (normal ? "as wished!" : "but didnt' want to!") << std::endl;
     });
-    client->on_reconnecting([](){
-      std::cout << "Reconneting..." << std::endl;
-    });
     client->on_reconnected([](){
       std::cout << "Reconnected, back there again!" << std::endl;
     });

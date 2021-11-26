@@ -58,6 +58,11 @@ if (WIN32)
     get_WIN32_WINNT(ver)
     add_definitions(-D_WIN32_WINNT=${ver})
 endif ()
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake OPTIONAL)
+if (COMMAND conan_basic_setup)
+    conan_basic_setup()
+endif ()
+
 
 
 #################################################
@@ -73,16 +78,15 @@ option(USE_IX_WEBSOCKET "Use ixwebsocket instead of cpprestsdk" OFF)
 #   Dependencies
 #
 #################################################
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake OPTIONAL)
-if (COMMAND conan_basic_setup)
-    conan_basic_setup()
-endif ()
+find_package(OpenSSL REQUIRED)
 if (USE_IX_WEBSOCKET)
     set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
+    #set(USE_MBED_TLS OFF CACHE BOOL "Use mbed TLS" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Don't use static libs" FORCE)
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
 else ()
     find_package(cpprestsdk REQUIRED)
+    find_package(OpenSSL REQUIRED)
 endif ()
 option(TECKOS_USE_EXTERNAL_JSON "Use an external JSON library" OFF)
 if (TECKOS_USE_EXTERNAL_JSON)
@@ -99,8 +103,8 @@ endif ()
 #   Library artifact
 #
 #################################################
-add_library(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
-add_library(${PROJECT_NAME}Static STATIC ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
+add_library(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/teckos/client.cc ${PROJECT_SOURCE_DIR}/src/teckos/rest.cc)
+add_library(${PROJECT_NAME}Static STATIC ${PROJECT_SOURCE_DIR}/src/teckos/client.cc ${PROJECT_SOURCE_DIR}/src/teckos/rest.cc)
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 add_library(${PROJECT_NAME}::${PROJECT_NAME}Static ALIAS ${PROJECT_NAME}Static)
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -114,30 +118,35 @@ if (CMAKE_COMPILER_IS_GNUCC)
     target_compile_options(${PROJECT_NAME}Static PRIVATE -Wall -Wextra -pedantic -Werror)
 endif ()
 
+target_link_libraries(${PROJECT_NAME}
+        PUBLIC
+        nlohmann_json::nlohmann_json)
+target_link_libraries(${PROJECT_NAME}Static
+        PUBLIC
+        nlohmann_json::nlohmann_json)
+
 if (USE_IX_WEBSOCKET)
     target_compile_definitions(${PROJECT_NAME}
-            PRIVATE
+            PUBLIC
             USE_IX_WEBSOCKET)
     target_compile_definitions(${PROJECT_NAME}Static
-            PRIVATE
+            PUBLIC
             USE_IX_WEBSOCKET)
     target_link_libraries(${PROJECT_NAME}
             PUBLIC
-            nlohmann_json::nlohmann_json
             ixwebsocket)
     target_link_libraries(${PROJECT_NAME}Static
             PUBLIC
-            nlohmann_json::nlohmann_json
             ixwebsocket)
 else ()
     target_link_libraries(${PROJECT_NAME}
-            PUBLIC
-            nlohmann_json::nlohmann_json
-            cpprestsdk::cpprest)
+            PRIVATE
+            cpprestsdk::cpprest
+            OpenSSL::Crypto)
     target_link_libraries(${PROJECT_NAME}Static
-            PUBLIC
-            nlohmann_json::nlohmann_json
-            cpprestsdk::cpprest)
+            PRIVATE
+            cpprestsdk::cpprest
+            OpenSSL::Crypto)
 endif ()
 
 

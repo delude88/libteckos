@@ -1,30 +1,9 @@
 #include "teckos/client.h"
 #include <memory>
 #include <iostream>
-
-#ifdef _WIN32
-typedef std::wstring string_t;
-#else
-typedef std::string string_t;
+#ifndef USE_IX_WEBSOCKET
+#include "teckos/utils.h"
 #endif
-
-// https://stackoverflow.com/questions/215963/how-do-you-properly-use-widechartomultibyte
-static std::string convert_to_utf8(const string_t &potentiallywide) {
-#ifdef _WIN32
-  if(potentiallywide.empty())
-    return std::string();
-  int size_needed =
-      WideCharToMultiByte(CP_UTF8, 0, &potentiallywide[0],
-                          (int)potentiallywide.size(), NULL, 0, NULL, NULL);
-  std::string strTo(size_needed, 0);
-  WideCharToMultiByte(CP_UTF8, 0, &potentiallywide[0],
-                      (int)potentiallywide.size(), &strTo[0], size_needed, NULL,
-                      NULL);
-  return strTo;
-#else
-  return potentiallywide;
-#endif
-}
 
 teckos::client::client(bool use_async_events) noexcept:
     reconnecting(false),
@@ -94,12 +73,14 @@ teckos::client::client(bool use_async_events) noexcept:
   // Create new websocket client and attach handler
   ws = std::make_shared<WebSocketClient>();
   ws->set_message_handler([&](const websocket_incoming_message &ret_msg) {
-    handleMessage(ret_msg.extract_string().get());
+    auto msg = ret_msg.extract_string().get();
+    std::cout << "MESSAGE:" << msg << std::endl;
+    handleMessage(msg);
   });
   ws->set_close_handler([&](websocket_close_status close_status,
                             const utility::string_t &reason,
                             const std::error_code &error) {
-    handleClose((int) close_status, convert_to_utf8(reason));
+    handleClose((int) close_status, teckos::utils::Convert_to_utf8(reason));
   });
 #endif
 }
