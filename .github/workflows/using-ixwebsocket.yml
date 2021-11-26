@@ -1,4 +1,4 @@
-name: WithIXWebsocket
+name: "Build with IXWebSocket"
 
 on: [push, pull_request]
 

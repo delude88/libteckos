@@ -1,4 +1,4 @@
-name: WithCpprestsdk
+name: "Build with cpprestsdk"
 
 on: [push, pull_request]
 

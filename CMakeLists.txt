@@ -78,10 +78,9 @@ if (COMMAND conan_basic_setup)
     conan_basic_setup()
 endif ()
 if (USE_IX_WEBSOCKET)
-    #set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
-    #set(BUILD_SHARED_LIBS ON CACHE BOOL "Don't use static libs" FORCE)
-    #add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
-    find_package(ixwebsocket REQUIRED)
+    set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Don't use static libs" FORCE)
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
 else ()
     find_package(cpprestsdk REQUIRED)
 endif ()
@@ -119,14 +118,17 @@ if (USE_IX_WEBSOCKET)
     target_compile_definitions(${PROJECT_NAME}
             PRIVATE
             USE_IX_WEBSOCKET)
+    target_compile_definitions(${PROJECT_NAME}Static
+            PRIVATE
+            USE_IX_WEBSOCKET)
     target_link_libraries(${PROJECT_NAME}
             PUBLIC
             nlohmann_json::nlohmann_json
-            IXWebSocket)
+            ixwebsocket)
     target_link_libraries(${PROJECT_NAME}Static
             PUBLIC
             nlohmann_json::nlohmann_json
-            IXWebSocket)
+            ixwebsocket)
 else ()
     target_link_libraries(${PROJECT_NAME}
             PUBLIC
@@ -173,14 +175,22 @@ install(
         DIRECTORY ${INCLUDE_DIR}/
         DESTINATION ${INCLUDE_INSTALL_DIR}
 )
-export(
-        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
-        NAMESPACE ${PROJECT_NAME}::
-        FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
+if (USE_IX_WEBSOCKET)
+    export(
+            TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static ixwebsocket
+            NAMESPACE ${PROJECT_NAME}::
+            FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
+else ()
+    export(
+            TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
+            NAMESPACE ${PROJECT_NAME}::
+            FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
+endif ()
 install(
         TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
         EXPORT ${TARGETS_EXPORT_NAME}
         INCLUDES DESTINATION ${INCLUDE_INSTALL_DIR})
+
 install(
         EXPORT ${TARGETS_EXPORT_NAME}
         NAMESPACE ${PROJECT_NAME}::

@@ -2,9 +2,15 @@
 #include <memory>
 #include <iostream>
 
+#ifdef _WIN32
+typedef std::wstring string_t;
+#else
+typedef std::string string_t;
+#endif
+
 // https://stackoverflow.com/questions/215963/how-do-you-properly-use-widechartomultibyte
-static std::string convert_to_utf8(const utility::string_t &potentiallywide) {
-#ifdef WIN32
+static std::string convert_to_utf8(const string_t &potentiallywide) {
+#ifdef _WIN32
   if(potentiallywide.empty())
     return std::string();
   int size_needed =
@@ -20,10 +26,10 @@ static std::string convert_to_utf8(const utility::string_t &potentiallywide) {
 #endif
 }
 
-teckos::client::client(bool async_events) noexcept:
+teckos::client::client(bool use_async_events) noexcept:
     reconnecting(false),
     connected(false),
-    async_events(async_events) {
+    async_events(use_async_events) {
   std::cout << "teckos::CONSTRUCT" << std::endl;
 #ifdef USE_IX_WEBSOCKET
   ix::initNetSystem();
@@ -33,12 +39,12 @@ teckos::client::client(bool async_events) noexcept:
     switch (msg->type) {
       case ix::WebSocketMessageType::Message: {
         if (connected) {
-          handleMessage(msg);
+          handleMessage(msg->str);
         }
         break;
       }
       case ix::WebSocketMessageType::Close: {
-        handleClose(msg);
+        handleClose(msg->closeInfo.code, msg->closeInfo.reason);
         break;
       }
       case ix::WebSocketMessageType::Open: {
@@ -187,9 +193,9 @@ void teckos::client::disconnect() noexcept {
       ws->stop(1000, "Normal Closure");
 #else
       ws->close(websocket_close_status::normal);
+#endif
     }
     connected = false;
-#endif
   } catch (std::exception exception) {
     std::cerr << exception.what() << std::endl;
   }
@@ -286,7 +292,7 @@ void teckos::client::handleMessage(const std::string &msg) {
       // We have to call the function
       const int32_t id = j["id"];
       if (acks.count(id) > 0) {
-        acks[id](j["data"].get < std::vector < nlohmann::json >> ());
+        acks[id](j["data"].get<std::vector<nlohmann::json >>());
         acks.erase(id);
       }
       break;
