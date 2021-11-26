@@ -2,6 +2,24 @@
 #include <memory>
 #include <iostream>
 
+// https://stackoverflow.com/questions/215963/how-do-you-properly-use-widechartomultibyte
+static std::string convert_to_utf8(const utility::string_t &potentiallywide) {
+#ifdef WIN32
+  if(potentiallywide.empty())
+    return std::string();
+  int size_needed =
+      WideCharToMultiByte(CP_UTF8, 0, &potentiallywide[0],
+                          (int)potentiallywide.size(), NULL, 0, NULL, NULL);
+  std::string strTo(size_needed, 0);
+  WideCharToMultiByte(CP_UTF8, 0, &potentiallywide[0],
+                      (int)potentiallywide.size(), &strTo[0], size_needed, NULL,
+                      NULL);
+  return strTo;
+#else
+  return potentiallywide;
+#endif
+}
+
 teckos::client::client(bool async_events) noexcept: reconnecting(false), connected(false), async_events(async_events) {
 #ifdef USE_IX_WEBSOCKET
   ix::initNetSystem();
@@ -129,12 +147,12 @@ void teckos::client::connect() {
   ws->set_close_handler([&](websocket_close_status close_status,
                             const utility::string_t &reason,
                             const std::error_code &error) {
-    handleClose((int) close_status, reason);
+    handleClose((int) close_status, convert_to_utf8(reason));
   });
   // Connect
   connected = false;
   authenticated = false;
-  ws->connect(info.url).then([&]() {
+  ws->connect(U(info.url)).then([&]() {
     connected = true;
     if (connectedHandler) {
       if (async_events) {
@@ -157,10 +175,14 @@ void teckos::client::connect() {
 void teckos::client::disconnect() noexcept {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   try {
+    if (connected) {
 #ifdef USE_IX_WEBSOCKET
-    ws->stop(1000, "Normal Closure");
+      ws->stop(1000, "Normal Closure");
 #else
-    ws->close();
+      ws->set_message_handler(nullptr);
+      ws->close(websocket_close_status::normal);
+    }
+    connected = false;
 #endif
   } catch (std::exception exception) {
     std::cerr << exception.what() << std::endl;
