@@ -1,4 +1,4 @@
-name: Build
+name: WithIXWebsocket
 
 on: [push, pull_request]
 
@@ -46,6 +46,6 @@ jobs:
           conan profile update settings.compiler.libcxx=libstdc++11 default
           conan install -if build --build=missing .
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config.build_type }}
+        run: cmake -S . -B build -DUSE_IX_WEBSOCKET=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.build_type }}
       - name: Build with CMake
         run: cmake --build build --config ${{ matrix.config.build_type }}
