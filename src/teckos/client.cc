@@ -80,7 +80,7 @@ teckos::client::client(bool use_async_events) noexcept:
   ws->set_close_handler([&](websocket_close_status close_status,
                             const utility::string_t &reason,
                             const std::error_code &error) {
-    handleClose((int) close_status, teckos::utils::Convert_to_utf8(reason));
+    handleClose((int) close_status, utility::conversions::to_utf8string(reason));
   });
 #endif
 }
@@ -147,7 +147,7 @@ void teckos::client::connect() {
   // We have to do this sync step per step,
   // since a destruction of this object while
   // connecting would lead to undefined behavior
-  ws->connect(U(info.url)).get();
+  ws->connect(utility::conversions::to_string_t(info.url)).get();
   connected = true;
   if (connectedHandler) {
     if (async_events) {

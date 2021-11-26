@@ -54,16 +54,17 @@ teckos::Result teckos::rest::Post(const std::string &url, const Header header, c
 #include <cpprest/http_client.h>
 
 teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
-  web::http::client::http_client client(U(url));
+  web::http::client::http_client client(utility::conversions::to_string_t(url));
   web::http::http_request request(web::http::methods::GET);
   for (const auto &item: header) {
-    request.headers().add(U(item.first), U(item.second));
+    request.headers().add(utility::conversions::to_string_t(item.first),
+                          utility::conversions::to_string_t(item.second));
   }
   auto response = client.request(request).get();
   teckos::Result result;
   result.statusCode = response.status_code();
-  result.statusMessage = teckos::utils::Convert_to_utf8(response.reason_phrase());
-  auto strBody = teckos::utils::Convert_to_utf8(response.extract_string().get());
+  result.statusMessage = utility::conversions::to_utf8string(response.reason_phrase());
+  auto strBody = utility::conversions::to_utf8string(response.extract_string().get());
   if (nlohmann::json::accept(strBody)) {
     result.body = nlohmann::json::parse(strBody);
   } else {
@@ -73,19 +74,19 @@ teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
 }
 
 teckos::Result teckos::rest::Post(const std::string &url, const Header header, const nlohmann::json &body) {
-  web::http::client::http_client client(U(url));
+  web::http::client::http_client client(utility::conversions::to_string_t(url));
   web::http::http_request request(web::http::methods::POST);
   if (!body.is_null()) {
     request.set_body(body.dump(), "application/json");
   }
   for (const auto &item: header) {
-    request.headers().add(U(item.first), U(item.second));
+    request.headers().add(utility::conversions::to_string_t(item.first), utility::conversions::to_string_t(item.second));
   }
   auto response = client.request(request).get();
   teckos::Result result;
   result.statusCode = response.status_code();
-  result.statusMessage = teckos::utils::Convert_to_utf8(response.reason_phrase());
-  auto strBody = teckos::utils::Convert_to_utf8(response.extract_string().get());
+  result.statusMessage = utility::conversions::to_utf8string(response.reason_phrase());
+  auto strBody = utility::conversions::to_utf8string(response.extract_string().get());
   if (nlohmann::json::accept(strBody)) {
     result.body = nlohmann::json::parse(strBody);
   } else {
