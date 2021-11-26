@@ -30,6 +30,7 @@ set(TARGETS_EXPORT_NAME "${PROJECT_NAME}Targets")
 set(INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Install path for include files")
 set(LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR} CACHE PATH "Install path for library files")
+# Apple homebrew configuration
 if (APPLE)
     if (EXISTS "/usr/local/opt/openssl/")
         set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
@@ -37,6 +38,12 @@ if (APPLE)
         include("${PROJECT_SOURCE_DIR}/cmake/BrewResolver.cmake")
     endif ()
 endif (APPLE)
+# Conan
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake OPTIONAL)
+if (COMMAND conan_basic_setup)
+    conan_basic_setup()
+endif ()
+# Boost WIN flags
 if (WIN32)
     macro(get_WIN32_WINNT version)
         if (CMAKE_SYSTEM_VERSION)
@@ -58,11 +65,6 @@ if (WIN32)
     get_WIN32_WINNT(ver)
     add_definitions(-D_WIN32_WINNT=${ver})
 endif ()
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake OPTIONAL)
-if (COMMAND conan_basic_setup)
-    conan_basic_setup()
-endif ()
-
 
 
 #################################################
