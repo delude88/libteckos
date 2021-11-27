@@ -142,11 +142,11 @@ if (USE_IX_WEBSOCKET)
             ixwebsocket)
 else ()
     target_link_libraries(${PROJECT_NAME}
-            PRIVATE
+            PUBLIC
             cpprestsdk::cpprest
             OpenSSL::Crypto)
     target_link_libraries(${PROJECT_NAME}Static
-            PRIVATE
+            PUBLIC
             cpprestsdk::cpprest
             OpenSSL::Crypto)
 endif ()
