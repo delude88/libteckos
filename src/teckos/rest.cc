@@ -50,7 +50,6 @@ teckos::Result teckos::rest::Post(const std::string &url, const Header header, c
   return result;
 }
 #else
-#include "teckos/utils.h"
 #include <cpprest/http_client.h>
 
 teckos::Result teckos::rest::Get(const std::string &url, const Header header) {

@@ -1,9 +1,6 @@
 #include "teckos/client.h"
 #include <memory>
 #include <iostream>
-#ifndef USE_IX_WEBSOCKET
-#include "teckos/utils.h"
-#endif
 
 teckos::client::client(bool use_async_events) noexcept:
     reconnecting(false),
