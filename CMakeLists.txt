@@ -72,6 +72,7 @@ endif ()
 #   Environment
 #
 #################################################
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(USE_IX_WEBSOCKET "Use ixwebsocket instead of cpprestsdk" OFF)
 
 
