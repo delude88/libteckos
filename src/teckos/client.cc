@@ -1,3 +1,4 @@
+#include "teckos/global.h"
 #include "teckos/client.h"
 #include <memory>
 #include <iostream>
@@ -6,7 +7,7 @@ teckos::client::client(bool use_async_events) noexcept:
     reconnecting(false),
     connected(false),
     async_events(use_async_events) {
-  std::cout << "teckos::CONSTRUCT" << std::endl;
+  teckos::global::init();
 #ifdef USE_IX_WEBSOCKET
   ix::initNetSystem();
   ws = std::make_shared<WebSocketClient>();
@@ -71,7 +72,6 @@ teckos::client::client(bool use_async_events) noexcept:
   ws = std::make_shared<WebSocketClient>();
   ws->set_message_handler([&](const websocket_incoming_message &ret_msg) {
     auto msg = ret_msg.extract_string().get();
-    std::cout << "MESSAGE:" << msg << std::endl;
     handleMessage(msg);
   });
   ws->set_close_handler([&](websocket_close_status close_status,
@@ -83,7 +83,6 @@ teckos::client::client(bool use_async_events) noexcept:
 }
 
 teckos::client::~client() {
-  std::cout << "teckos::DESTRUCTOR" << std::endl;
   for (auto &item: threadPool) {
     if (item.joinable())
       item.join();

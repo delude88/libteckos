@@ -1,9 +1,11 @@
 #include "teckos/rest.h"
+#include "teckos/global.h"
 
 #ifdef USE_IX_WEBSOCKET
 #include <ixwebsocket/IXHttpClient.h>
 
 teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
+  teckos::global::init();
   ix::HttpClient httpClient(false);
   auto args_ptr = std::make_shared<ix::HttpRequestArgs>();
   for (const auto &item: header) {
@@ -25,6 +27,7 @@ teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
 }
 
 teckos::Result teckos::rest::Post(const std::string &url, const Header header, const nlohmann::json &body) {
+  teckos::global::init();
   ix::HttpClient httpClient(false);
   auto args_ptr = std::make_shared<ix::HttpRequestArgs>();
   for (const auto &item: header) {
@@ -53,6 +56,7 @@ teckos::Result teckos::rest::Post(const std::string &url, const Header header, c
 #include <cpprest/http_client.h>
 
 teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
+  teckos::global::init();
   web::http::client::http_client client(utility::conversions::to_string_t(url));
   web::http::http_request request(web::http::methods::GET);
   for (const auto &item: header) {
@@ -73,6 +77,7 @@ teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
 }
 
 teckos::Result teckos::rest::Post(const std::string &url, const Header header, const nlohmann::json &body) {
+  teckos::global::init();
   web::http::client::http_client client(utility::conversions::to_string_t(url));
   web::http::http_request request(web::http::methods::POST);
   if (!body.is_null()) {
