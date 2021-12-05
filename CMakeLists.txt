@@ -99,6 +99,10 @@ else ()
     set(JSON_Install ON CACHE INTERNAL "")
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/nlohmann_json EXCLUDE_FROM_ALL)
 endif ()
+if (CMAKE_OSX_DEPLOYMENT_TARGET LESS_EQUAL "10.14")
+    # See: https://github.com/nlohmann/json/issues/3156
+    target_compile_definitions(nlohmann_json INTERFACE -DJSON_HAS_CPP_14)
+endif ()
 
 
 #################################################
