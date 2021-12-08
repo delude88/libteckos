@@ -83,11 +83,10 @@ option(USE_IX_WEBSOCKET "Use ixwebsocket instead of cpprestsdk" OFF)
 #################################################
 find_package(OpenSSL REQUIRED)
 if (USE_IX_WEBSOCKET)
-    #set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
-    #set(USE_MBED_TLS OFF CACHE BOOL "Use mbed TLS" FORCE)
-    #set(BUILD_SHARED_LIBS OFF CACHE BOOL "Don't use static libs" FORCE)
-    #add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
-    find_package(ixwebsocket REQUIRED)
+    set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
+    set(USE_MBED_TLS OFF CACHE BOOL "Use mbed TLS" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Don't use static libs" FORCE)
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
 else ()
     find_package(cpprestsdk REQUIRED)
     find_package(OpenSSL REQUIRED)
@@ -188,7 +187,7 @@ install(
 )
 if (USE_IX_WEBSOCKET)
     export(
-            TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
+            TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static ixwebsocket
             NAMESPACE ${PROJECT_NAME}::
             FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
 else ()
