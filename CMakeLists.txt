@@ -114,6 +114,11 @@ if (CMAKE_COMPILER_IS_GNUCC)
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -Werror)
     target_compile_options(${PROJECT_NAME}Static PRIVATE -Wall -Wextra -pedantic -Werror)
 endif ()
+if (CMAKE_OSX_DEPLOYMENT_TARGET LESS_EQUAL "10.14")
+    # See: https://github.com/nlohmann/json/issues/3156
+    target_compile_definitions(${PROJECT_NAME} PUBLIC JSON_HAS_CPP_14)
+    target_compile_definitions(${PROJECT_NAME}Static PUBLIC JSON_HAS_CPP_14)
+endif ()
 
 target_link_libraries(${PROJECT_NAME}
         PUBLIC
