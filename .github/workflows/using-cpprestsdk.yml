@@ -22,8 +22,8 @@ jobs:
             build_type: "Release"
           }
           - {
-            name: "macOS Latest",
-            os: macos-latest,
+            name: "macOS 10.13",
+            os: macos-10.15,
             build_type: "Release"
           }
 
@@ -38,7 +38,7 @@ jobs:
       - name: Install Dependencies with Conan
         if: ${{ matrix.config.os != 'ubuntu-latest' }}
         run: |
-          conan install -if build --build=missing .
+          conan install -if build --build=missing -s os.version=10.13 .
       - name: Install Dependencies with Conan (Ubuntu gcc)
         if: ${{ matrix.config.os == 'ubuntu-latest' }}
         run: |
@@ -46,7 +46,12 @@ jobs:
           conan profile update settings.compiler.libcxx=libstdc++11 default
           conan install -if build --build=missing .
       - name: Configure CMake
+        if: ${{ matrix.config.os != 'macos-10.15' }}
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config.build_type }}
+      - name: Configure CMake (macOS 10.13+)
+        if: ${{ matrix.config.os == 'macos-10.15' }}
+        run: |
+          cmake -S . -B build -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13 -DCMAKE_BUILD_TYPE=${{ matrix.config.build_type }}
       - name: Build with CMake
         run: cmake --build build --config ${{ matrix.config.build_type }}
