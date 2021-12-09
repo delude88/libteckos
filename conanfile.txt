@@ -1,6 +1,11 @@
 [requires]
-cpprestsdk/2.10.18
+# Common
 nlohmann_json/3.10.4
+
+# when using cpprestsdk for libteckos
+cpprestsdk/2.10.18
+
+# when using IXWebSocket for libteckos
 mbedtls/3.0.0
 libdeflate/1.8
 zlib/1.2.11
