@@ -76,7 +76,7 @@ teckos::client::client(bool use_async_events) noexcept:
   });
   ws->set_close_handler([&](websocket_close_status close_status,
                             const utility::string_t &reason,
-                            const std::error_code &error) {
+                            const std::error_code &/*error*/) {
     handleClose((int) close_status, utility::conversions::to_utf8string(reason));
   });
 #endif
@@ -173,7 +173,7 @@ void teckos::client::disconnect() noexcept {
 #endif
     }
     connected = false;
-  } catch (std::exception exception) {
+  } catch (const std::exception &exception) {
     std::cerr << exception.what() << std::endl;
   }
 }
