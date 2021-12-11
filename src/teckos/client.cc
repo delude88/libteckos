@@ -178,7 +178,7 @@ void teckos::client::disconnect() noexcept {
   }
 }
 
-void teckos::client::handleClose(int code, const std::string &reason) {
+void teckos::client::handleClose(int code, const std::string &/*reason*/) {
   connected = false;
   authenticated = false;
   auto abnormal_exit = code != 1000;
