@@ -30,6 +30,7 @@ set(TARGETS_EXPORT_NAME "${PROJECT_NAME}Targets")
 set(INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Install path for include files")
 set(LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR} CACHE PATH "Install path for library files")
+# Apple homebrew configuration
 if (APPLE)
     if (EXISTS "/usr/local/opt/openssl/")
         set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
@@ -37,6 +38,42 @@ if (APPLE)
         include("${PROJECT_SOURCE_DIR}/cmake/BrewResolver.cmake")
     endif ()
 endif (APPLE)
+# Conan
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake OPTIONAL)
+if (COMMAND conan_basic_setup)
+    conan_basic_setup()
+endif ()
+# Boost WIN flags
+if (WIN32)
+    macro(get_WIN32_WINNT version)
+        if (CMAKE_SYSTEM_VERSION)
+            set(ver ${CMAKE_SYSTEM_VERSION})
+            string(REGEX MATCH "^([0-9]+).([0-9])" ver ${ver})
+            string(REGEX MATCH "^([0-9]+)" verMajor ${ver})
+            # Check for Windows 10, b/c we'll need to convert to hex 'A'.
+            if ("${verMajor}" MATCHES "10")
+                set(verMajor "A")
+                string(REGEX REPLACE "^([0-9]+)" ${verMajor} ver ${ver})
+            endif ()
+            # Remove all remaining '.' characters.
+            string(REPLACE "." "" ver ${ver})
+            # Prepend each digit with a zero.
+            string(REGEX REPLACE "([0-9A-Z])" "0\\1" ver ${ver})
+            set(${version} "0x${ver}")
+        endif ()
+    endmacro()
+    get_WIN32_WINNT(ver)
+    add_definitions(-D_WIN32_WINNT=${ver})
+endif ()
+
+
+#################################################
+#
+#   Environment
+#
+#################################################
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+option(USE_IX_WEBSOCKET "Use ixwebsocket instead of cpprestsdk" OFF)
 
 
 #################################################
@@ -44,9 +81,17 @@ endif (APPLE)
 #   Dependencies
 #
 #################################################
-find_package(cpprestsdk REQUIRED)
 find_package(OpenSSL REQUIRED)
-find_package(nlohmann_json REQUIRED)
+if (USE_IX_WEBSOCKET)
+    set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
+    set(USE_MBED_TLS OFF CACHE BOOL "Use mbed TLS" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Don't use static libs" FORCE)
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
+else ()
+    find_package(cpprestsdk REQUIRED)
+    find_package(OpenSSL REQUIRED)
+endif ()
+find_package(nlohmann_json 3.2.0 REQUIRED)
 
 
 #################################################
@@ -54,8 +99,8 @@ find_package(nlohmann_json REQUIRED)
 #   Library artifact
 #
 #################################################
-add_library(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
-add_library(${PROJECT_NAME}Static STATIC ${PROJECT_SOURCE_DIR}/src/teckos/client.cc)
+add_library(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/teckos/client.cc ${PROJECT_SOURCE_DIR}/src/teckos/rest.cc)
+add_library(${PROJECT_NAME}Static STATIC ${PROJECT_SOURCE_DIR}/src/teckos/client.cc ${PROJECT_SOURCE_DIR}/src/teckos/rest.cc)
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 add_library(${PROJECT_NAME}::${PROJECT_NAME}Static ALIAS ${PROJECT_NAME}Static)
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -68,16 +113,42 @@ if (CMAKE_COMPILER_IS_GNUCC)
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -Werror)
     target_compile_options(${PROJECT_NAME}Static PRIVATE -Wall -Wextra -pedantic -Werror)
 endif ()
+if (CMAKE_OSX_DEPLOYMENT_TARGET LESS_EQUAL "10.14")
+    # See: https://github.com/nlohmann/json/issues/3156
+    target_compile_definitions(${PROJECT_NAME} PUBLIC JSON_HAS_CPP_14)
+    target_compile_definitions(${PROJECT_NAME}Static PUBLIC JSON_HAS_CPP_14)
+endif ()
+
 target_link_libraries(${PROJECT_NAME}
         PUBLIC
-        nlohmann_json::nlohmann_json
-        OpenSSL::Crypto
-        cpprestsdk::cpprest)
+        nlohmann_json::nlohmann_json)
 target_link_libraries(${PROJECT_NAME}Static
         PUBLIC
-        nlohmann_json::nlohmann_json
-        OpenSSL::Crypto
-        cpprestsdk::cpprest)
+        nlohmann_json::nlohmann_json)
+
+if (USE_IX_WEBSOCKET)
+    target_compile_definitions(${PROJECT_NAME}
+            PUBLIC
+            USE_IX_WEBSOCKET)
+    target_compile_definitions(${PROJECT_NAME}Static
+            PUBLIC
+            USE_IX_WEBSOCKET)
+    target_link_libraries(${PROJECT_NAME}
+            PUBLIC
+            ixwebsocket)
+    target_link_libraries(${PROJECT_NAME}Static
+            PUBLIC
+            ixwebsocket)
+else ()
+    target_link_libraries(${PROJECT_NAME}
+            PUBLIC
+            cpprestsdk::cpprest
+            OpenSSL::Crypto)
+    target_link_libraries(${PROJECT_NAME}Static
+            PUBLIC
+            cpprestsdk::cpprest
+            OpenSSL::Crypto)
+endif ()
 
 
 #################################################
@@ -114,14 +185,22 @@ install(
         DIRECTORY ${INCLUDE_DIR}/
         DESTINATION ${INCLUDE_INSTALL_DIR}
 )
-export(
-        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
-        NAMESPACE ${PROJECT_NAME}::
-        FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
+if (USE_IX_WEBSOCKET)
+    export(
+            TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static ixwebsocket
+            NAMESPACE ${PROJECT_NAME}::
+            FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
+else ()
+    export(
+            TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
+            NAMESPACE ${PROJECT_NAME}::
+            FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
+endif ()
 install(
         TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
         EXPORT ${TARGETS_EXPORT_NAME}
         INCLUDES DESTINATION ${INCLUDE_INSTALL_DIR})
+
 install(
         EXPORT ${TARGETS_EXPORT_NAME}
         NAMESPACE ${PROJECT_NAME}::
