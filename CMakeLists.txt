@@ -37,14 +37,13 @@ option(USE_IX_WEBSOCKET "Use ixwebsocket instead of cpprestsdk" OFF)
 #   Dependencies
 #
 #################################################
-find_package(OpenSSL REQUIRED)
 if (USE_IX_WEBSOCKET)
     set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
-    set(USE_MBED_TLS OFF CACHE BOOL "Use mbed TLS" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Don't use static libs" FORCE)
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
 else ()
     find_package(cpprestsdk REQUIRED)
+    find_package(OpenSSL REQUIRED)
 endif ()
 find_package(nlohmann_json 3.2.0 REQUIRED)
 
