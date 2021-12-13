@@ -1,13 +1,5 @@
 cmake_minimum_required(VERSION 3.16.0)
 
-if (DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-            CACHE STRING "")
-elseif (DEFINED ENV{VCPKG_INSTALLATION_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
-            CACHE STRING "")
-endif ()
-
 project(teckos
         LANGUAGES CXX
         VERSION 0.1
@@ -20,51 +12,14 @@ project(teckos
 #   Common configuration
 #
 #################################################
-include(GNUInstallDirs)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
 set(TARGET_NAME ${PROJECT_NAME})
 set(TARGETS_EXPORT_NAME "${PROJECT_NAME}Targets")
 set(INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Install path for include files")
 set(LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR} CACHE PATH "Install path for library files")
-# Apple homebrew configuration
-if (APPLE)
-    if (EXISTS "/usr/local/opt/openssl/")
-        set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
-    else ()
-        include("${PROJECT_SOURCE_DIR}/cmake/BrewResolver.cmake")
-    endif ()
-endif (APPLE)
-# Conan
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake OPTIONAL)
-if (COMMAND conan_basic_setup)
-    conan_basic_setup()
-endif ()
-# Boost WIN flags
-if (WIN32)
-    macro(get_WIN32_WINNT version)
-        if (CMAKE_SYSTEM_VERSION)
-            set(ver ${CMAKE_SYSTEM_VERSION})
-            string(REGEX MATCH "^([0-9]+).([0-9])" ver ${ver})
-            string(REGEX MATCH "^([0-9]+)" verMajor ${ver})
-            # Check for Windows 10, b/c we'll need to convert to hex 'A'.
-            if ("${verMajor}" MATCHES "10")
-                set(verMajor "A")
-                string(REGEX REPLACE "^([0-9]+)" ${verMajor} ver ${ver})
-            endif ()
-            # Remove all remaining '.' characters.
-            string(REPLACE "." "" ver ${ver})
-            # Prepend each digit with a zero.
-            string(REGEX REPLACE "([0-9A-Z])" "0\\1" ver ${ver})
-            set(${version} "0x${ver}")
-        endif ()
-    endmacro()
-    get_WIN32_WINNT(ver)
-    add_definitions(-D_WIN32_WINNT=${ver})
-endif ()
 
 
 #################################################
@@ -89,7 +44,6 @@ if (USE_IX_WEBSOCKET)
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
 else ()
     find_package(cpprestsdk REQUIRED)
-    find_package(OpenSSL REQUIRED)
 endif ()
 find_package(nlohmann_json 3.2.0 REQUIRED)
 
