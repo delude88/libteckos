@@ -38,8 +38,17 @@ option(USE_IX_WEBSOCKET "Use ixwebsocket instead of cpprestsdk" OFF)
 #
 #################################################
 if (USE_IX_WEBSOCKET)
+    # Want to remove the following, but Windows seems to need this - at least @github-actions:
+    #if (${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
+    if (WIN32)
+        include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake OPTIONAL)
+        if (COMMAND conan_basic_setup)
+            conan_basic_setup()
+        endif ()
+    endif ()
+    #endif ()
+
     set(USE_TLS ON CACHE BOOL "Support TLS" FORCE)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Don't use static libs" FORCE)
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/IXWebSocket EXCLUDE_FROM_ALL)
 else ()
     find_package(cpprestsdk REQUIRED)
@@ -67,13 +76,13 @@ if (CMAKE_COMPILER_IS_GNUCC)
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -Werror)
     target_compile_options(${PROJECT_NAME}Static PRIVATE -Wall -Wextra -pedantic -Werror)
 endif ()
-if(APPLE)
-if (CMAKE_OSX_DEPLOYMENT_TARGET LESS_EQUAL "10.14")
-    # See: https://github.com/nlohmann/json/issues/3156
-    target_compile_definitions(${PROJECT_NAME} PUBLIC JSON_HAS_CPP_14)
-    target_compile_definitions(${PROJECT_NAME}Static PUBLIC JSON_HAS_CPP_14)
+if (APPLE)
+    if (CMAKE_OSX_DEPLOYMENT_TARGET LESS_EQUAL "10.14")
+        # See: https://github.com/nlohmann/json/issues/3156
+        target_compile_definitions(${PROJECT_NAME} PUBLIC JSON_HAS_CPP_14)
+        target_compile_definitions(${PROJECT_NAME}Static PUBLIC JSON_HAS_CPP_14)
+    endif ()
 endif ()
-endif()
 
 target_link_libraries(${PROJECT_NAME}
         PUBLIC
