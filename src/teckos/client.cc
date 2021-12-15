@@ -285,7 +285,10 @@ void teckos::client::setMessageHandler(
     const std::function<void(const std::vector<nlohmann::json> &)> &
     handler) noexcept {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  msgHandler = handler;
+  auto func = [handler](const std::vector<nlohmann::json> &json){
+    handler(json);
+  };
+  msgHandler = func;
 }
 
 void teckos::client::send(const std::string &event) {
@@ -377,11 +380,17 @@ void teckos::client::on_connected(const std::function<void()> &handler) noexcept
 void teckos::client::on_reconnected(
     const std::function<void()> &handler) noexcept {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  reconnectedHandler = handler;
+  auto func = [handler](){
+    handler();
+  };
+  reconnectedHandler = func;
 }
 
 void teckos::client::on_disconnected(
     const std::function<void(bool)> &handler) noexcept {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  disconnectedHandler = handler;
+  auto func = [handler](bool result){
+    handler(result);
+  };
+  disconnectedHandler = func;
 }

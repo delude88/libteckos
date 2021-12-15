@@ -115,6 +115,7 @@ class client {
 
  private:
   std::chrono::milliseconds timeout = std::chrono::milliseconds(500);
+
   std::function<void()> connectedHandler;
   std::function<void()> reconnectedHandler;
   std::function<void(bool)> disconnectedHandler;
