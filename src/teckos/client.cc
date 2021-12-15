@@ -194,7 +194,7 @@ void teckos::client::handleClose(int code, const std::string &/*reason*/) {
         disconnectedHandler(std::move(abnormal_exit));
       });
     } else {
-      disconnectedHandler(abnormal_exit);
+      disconnectedHandler(std::move(abnormal_exit));
     }
   }
 }
@@ -285,10 +285,14 @@ void teckos::client::setMessageHandler(
     const std::function<void(const std::vector<nlohmann::json> &)> &
     handler) noexcept {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  auto func = [handler](const std::vector<nlohmann::json> &json){
-    handler(json);
-  };
-  msgHandler = func;
+  if (handler) {
+    auto func = [handler](const std::vector<nlohmann::json> &json) {
+      handler(json);
+    };
+    msgHandler = func;
+  } else {
+    msgHandler = nullptr;
+  }
 }
 
 void teckos::client::send(const std::string &event) {
@@ -380,17 +384,25 @@ void teckos::client::on_connected(const std::function<void()> &handler) noexcept
 void teckos::client::on_reconnected(
     const std::function<void()> &handler) noexcept {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  auto func = [handler](){
-    handler();
-  };
-  reconnectedHandler = func;
+  if (handler) {
+    auto func = [handler]() {
+      handler();
+    };
+    reconnectedHandler = func;
+  } else {
+    reconnectedHandler = nullptr;
+  }
 }
 
 void teckos::client::on_disconnected(
     const std::function<void(bool)> &handler) noexcept {
   std::lock_guard<std::recursive_mutex> lock(mutex);
-  auto func = [handler](bool result){
-    handler(result);
-  };
-  disconnectedHandler = func;
+  if (handler) {
+    auto func = [handler](bool result) {
+      handler(result);
+    };
+    disconnectedHandler = func;
+  } else {
+    disconnectedHandler = nullptr;
+  }
 }

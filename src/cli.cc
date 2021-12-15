@@ -3,37 +3,36 @@
 #include <teckos/client.h>
 #include <thread>
 
-int main(int, char const*[])
-{
+int main(int, char const *[]) {
   bool isReady = false;
 
   try {
     const std::string jwt = "mytoken";
 
-    auto* client = new teckos::client();
+    auto *client = new teckos::client();
 
     // Set message handler
-    client->setMessageHandler([&](const std::vector<nlohmann::json>& msg) {
+    client->setMessageHandler([&](const std::vector<nlohmann::json> &msg) {
       // Do something here
-      if(!msg.empty()) {
+      if (!msg.empty()) {
         std::cout << "Received event " << msg[0] << std::endl;
       }
     });
 
     // Handle an event
-    client->on("ready", [&](const nlohmann::json&) {
+    client->on("ready", [&](const nlohmann::json &) {
       std::cout << "READY" << std::endl;
       isReady = true;
     });
 
     // Handle connection states
-    client->on_connected([](){
+    client->on_connected([]() {
       std::cout << "Connected!" << std::endl;
     });
-    client->on_disconnected([](bool normal){
+    client->on_disconnected([](bool normal) {
       std::cout << "Disconnected, " << (normal ? "as wished!" : "but didnt' want to!") << std::endl;
     });
-    client->on_reconnected([](){
+    client->on_reconnected([]() {
       std::cout << "Reconnected, back there again!" << std::endl;
     });
     // Connect with jwt and empty payload, also wait till connection is
@@ -45,9 +44,9 @@ int main(int, char const*[])
     std::cout << "Continue" << std::endl;
 
     int i = 0;
-    while(i < 20) {
+    while (i < 20) {
       std::cout << "THREAD ITERATION " << i << std::endl;
-      if(isReady && client->isConnected()) {
+      if (isReady && client->isConnected()) {
         client->send("no-args");
         client->send("hello", {"First name", "Last name"});
         client->send("work", {{"some", "data"}}, [](auto &result) {
@@ -60,7 +59,7 @@ int main(int, char const*[])
     }
     delete client;
   }
-  catch(std::exception& err) {
+  catch (std::exception &err) {
     std::cerr << err.what() << std::endl;
   }
   return 0;
