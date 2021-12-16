@@ -1,8 +1,13 @@
 #include "teckos/rest.h"
-#include "teckos/global.h"
+#include <memory>                                // for shared_ptr, make_shared
+#include <utility>                               // for pair, make_pair
+#include <stdexcept>                             // for runtime_error
+#include <string>                                // for basic_string, allocator
+#include "teckos/global.h"                       // for global
 
 #ifdef USE_IX_WEBSOCKET
 #include <ixwebsocket/IXHttpClient.h>
+#include <ixwebsocket/IXHttp.h>                  // for HttpRequestArgs
 
 teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
   teckos::global::init();

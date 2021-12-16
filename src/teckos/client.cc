@@ -1,7 +1,12 @@
-#include "teckos/global.h"
 #include "teckos/client.h"
-#include <memory>
-#include <iostream>
+#include <utility>                               // for move
+#include <__mutex_base>                          // for lock_guard
+#include <exception>                             // for exception
+#include <iostream>                              // for string, operator<<
+#include <nlohmann/detail/json_ref.hpp>          // for json_ref
+#include <stdexcept>                             // for runtime_error
+#include <type_traits>                           // for remove_extent_t, rem...
+#include "teckos/global.h"                       // for global
 
 teckos::client::client(bool use_async_events) noexcept:
     reconnecting(false),

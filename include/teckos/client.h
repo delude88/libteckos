@@ -5,22 +5,26 @@
 #ifndef TECKOSCLIENT_H_
 #define TECKOSCLIENT_H_
 
-#include <chrono>
-#include <future>
-#include <initializer_list>
-#include <iostream>
-#include <nlohmann/json.hpp>
-#include <string>
-#include <thread>
-#include <utility>
-#include <vector>
-#include <future>
-#include <optional>
+#include <memory>                     // for shared_ptr
+#include <chrono>                     // for milliseconds
+#include <cstdint>                    // for uint32_t
+#include <iostream>                   // for string
+#include <map>                        // for map
+#include <mutex>                      // for recursive_mutex
+#include <nlohmann/json.hpp>          // for basic_json
+#include <nlohmann/json_fwd.hpp>      // for json
+#include <optional>                   // for optional
+#include <string>                     // for basic_string
+#include <thread>                     // for thread
+#include <vector>                     // for vector
 
 #ifdef USE_IX_WEBSOCKET
-#include <ixwebsocket/IXNetSystem.h>
-#include <ixwebsocket/IXUserAgent.h>
-#include <ixwebsocket/IXWebSocket.h>
+#include <ixwebsocket/IXWebSocket.h>             // for WebSocket
+#include "ixwebsocket/IXNetSystem.h"             // for initNetSystem
+#include "ixwebsocket/IXWebSocketCloseInfo.h"    // for WebSocketCloseInfo
+#include "ixwebsocket/IXWebSocketErrorInfo.h"    // for WebSocketErrorInfo
+#include "ixwebsocket/IXWebSocketMessage.h"      // for WebSocketMessagePtr
+#include "ixwebsocket/IXWebSocketMessageType.h"  // for WebSocketMessageType
 typedef ix::WebSocket WebSocketClient;
 #else
 #include <cpprest/ws_client.h>
