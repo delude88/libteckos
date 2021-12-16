@@ -1,6 +1,6 @@
 #include "teckos/client.h"
 #include <utility>                               // for move
-#include <__mutex_base>                          // for lock_guard
+#include <mutex>                                 // for lock_guard
 #include <exception>                             // for exception
 #include <iostream>                              // for string, operator<<
 #include <nlohmann/detail/json_ref.hpp>          // for json_ref
