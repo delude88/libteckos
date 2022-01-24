@@ -11,8 +11,7 @@
 #include <iostream>                   // for string
 #include <map>                        // for map
 #include <mutex>                      // for recursive_mutex
-#include <nlohmann/json.hpp>          // for basic_json
-#include <nlohmann/json_fwd.hpp>      // for json
+#include <nlohmann/json.hpp>          // for json
 #include <optional>                   // for optional
 #include <string>                     // for basic_string
 #include <thread>                     // for thread

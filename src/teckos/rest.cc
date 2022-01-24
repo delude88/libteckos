@@ -1,13 +1,13 @@
 #include "teckos/rest.h"
-#include <memory>                                // for shared_ptr, make_shared
 #include <utility>                               // for pair, make_pair
-#include <stdexcept>                             // for runtime_error
-#include <string>                                // for basic_string, allocator
 #include "teckos/global.h"                       // for global
 
 #ifdef USE_IX_WEBSOCKET
 #include <ixwebsocket/IXHttpClient.h>
 #include <ixwebsocket/IXHttp.h>                  // for HttpRequestArgs
+#include <memory>                                // for shared_ptr, make_shared
+#include <stdexcept>                             // for runtime_error
+#include <string>                                // for basic_string, allocator
 
 teckos::RestResult teckos::rest::Get(const std::string &url, const Header header) {
   teckos::global::init();
@@ -60,7 +60,7 @@ teckos::RestResult teckos::rest::Post(const std::string &url, const Header heade
 #else
 #include <cpprest/http_client.h>
 
-teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
+teckos::RestResult teckos::rest::Get(const std::string &url, const Header header) {
   teckos::global::init();
   web::http::client::http_client client(utility::conversions::to_string_t(url));
   web::http::http_request request(web::http::methods::GET);
@@ -69,7 +69,7 @@ teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
                           utility::conversions::to_string_t(item.second));
   }
   auto response = client.request(request).get();
-  teckos::Result result;
+  teckos::RestResult result;
   result.statusCode = response.status_code();
   result.statusMessage = utility::conversions::to_utf8string(response.reason_phrase());
   auto strBody = utility::conversions::to_utf8string(response.extract_string().get());
@@ -81,7 +81,7 @@ teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
   return result;
 }
 
-teckos::Result teckos::rest::Post(const std::string &url, const Header header, const nlohmann::json &body) {
+teckos::RestResult teckos::rest::Post(const std::string &url, const Header header, const nlohmann::json &body) {
   teckos::global::init();
   web::http::client::http_client client(utility::conversions::to_string_t(url));
   web::http::http_request request(web::http::methods::POST);
@@ -92,7 +92,7 @@ teckos::Result teckos::rest::Post(const std::string &url, const Header header, c
     request.headers().add(utility::conversions::to_string_t(item.first), utility::conversions::to_string_t(item.second));
   }
   auto response = client.request(request).get();
-  teckos::Result result;
+  teckos::RestResult result;
   result.statusCode = response.status_code();
   result.statusMessage = utility::conversions::to_utf8string(response.reason_phrase());
   auto strBody = utility::conversions::to_utf8string(response.extract_string().get());
