@@ -9,7 +9,7 @@
 #include <ixwebsocket/IXHttpClient.h>
 #include <ixwebsocket/IXHttp.h>                  // for HttpRequestArgs
 
-teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
+teckos::RestResult teckos::rest::Get(const std::string &url, const Header header) {
   teckos::global::init();
   ix::HttpClient httpClient(false);
   auto args_ptr = std::make_shared<ix::HttpRequestArgs>();
@@ -20,7 +20,7 @@ teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
   if (response->statusCode == 0) {
     throw std::runtime_error(std::to_string((int) response->errorCode) + ": " + response->errorMsg);
   }
-  teckos::Result result;
+  teckos::RestResult result;
   result.statusCode = response->statusCode;
   result.statusMessage = response->description;
   if (nlohmann::json::accept(response->body)) {
@@ -31,7 +31,7 @@ teckos::Result teckos::rest::Get(const std::string &url, const Header header) {
   return result;
 }
 
-teckos::Result teckos::rest::Post(const std::string &url, const Header header, const nlohmann::json &body) {
+teckos::RestResult teckos::rest::Post(const std::string &url, const Header header, const nlohmann::json &body) {
   teckos::global::init();
   ix::HttpClient httpClient(false);
   auto args_ptr = std::make_shared<ix::HttpRequestArgs>();
@@ -47,7 +47,7 @@ teckos::Result teckos::rest::Post(const std::string &url, const Header header, c
   if (response->statusCode == 0) {
     throw std::runtime_error(std::to_string((int) response->errorCode) + ": " + response->errorMsg);
   }
-  teckos::Result result;
+  teckos::RestResult result;
   result.statusCode = response->statusCode;
   result.statusMessage = response->description;
   if (nlohmann::json::accept(response->body)) {
