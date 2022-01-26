@@ -31,6 +31,9 @@ set(LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR} CACHE PATH "Install path for library
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(USE_IX_WEBSOCKET "Use ixwebsocket instead of cpprestsdk" OFF)
 
+option(DEBUG_TECKOS_SEND "Print messages to console when sending" OFF)
+option(DEBUG_TECKOS_RECV "Print messages to console when receiving" OFF)
+
 
 #################################################
 #
@@ -114,7 +117,22 @@ else ()
             cpprestsdk::cpprest
             OpenSSL::Crypto)
 endif ()
-
+if (DEBUG_TECKOS_SEND)
+    target_compile_definitions(${PROJECT_NAME}
+            PUBLIC
+            DEBUG_TECKOS_SEND)
+    target_compile_definitions(${PROJECT_NAME}Static
+            PUBLIC
+            DEBUG_TECKOS_SEND)
+endif (DEBUG_TECKOS_SEND)
+if (DEBUG_TECKOS_RECV)
+    target_compile_definitions(${PROJECT_NAME}
+            PUBLIC
+            DEBUG_TECKOS_RECV)
+    target_compile_definitions(${PROJECT_NAME}Static
+            PUBLIC
+            DEBUG_TECKOS_RECV)
+endif (DEBUG_TECKOS_RECV)
 
 #################################################
 #

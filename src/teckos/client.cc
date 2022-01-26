@@ -14,7 +14,7 @@ teckos::client::client(bool use_async_events) noexcept:
   teckos::global::init();
 #ifdef USE_IX_WEBSOCKET
   ix::initNetSystem();
-  ws = std::make_shared<WebSocketClient>();
+  ws = std::make_unique<WebSocketClient>();
   ws->enablePong();
   ws->setOnMessageCallback([this](const ix::WebSocketMessagePtr &msg) {
     switch (msg->type) {
@@ -210,6 +210,9 @@ void teckos::client::handleClose(int code, const std::string &/*reason*/) {
 void teckos::client::handleMessage(const std::string &msg) noexcept {
   if (msg == "hey")
     return;
+#ifdef DEBUG_TECKOS_RECV
+  std::cout << "teckos:receive << " << msg << std::endl;
+#endif
   try {
     nlohmann::json j = nlohmann::json::parse(msg);
     const PacketType type = j["type"];
@@ -346,12 +349,20 @@ void teckos::client::sendPackage(teckos::packet p) {
   if (p.number) {
     jsonMsg["id"] = *p.number;
   }
+#ifdef DEBUG_TECKOS_SEND
+  std::cout << "teckos:send >> " << jsonMsg.dump() << std::endl;
+#endif
 #ifdef USE_IX_WEBSOCKET
   ws->send(jsonMsg.dump());
 #else
   web::websockets::client::websocket_outgoing_message msg;
   msg.set_utf8_message(jsonMsg.dump());
-  ws->send(msg);
+  try {
+    ws->send(msg).get();
+  } catch(std::exception &err) {
+    // Usually an exception is thrown here, when the connection has been disconnected in the meantime (since sendXY has been called)
+    std::cerr << "Warning: could not send message, reason: " << err.what() << std::endl;
+  }
 #endif
 }
 
