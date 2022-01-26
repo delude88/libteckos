@@ -6,7 +6,6 @@
 #include <iosfwd>                 // for string
 #include <map>                    // for map, map<>::value_compare
 #include <nlohmann/json.hpp>      // for basic_json
-#include <nlohmann/json_fwd.hpp>  // for json
 
 namespace teckos {
 struct RestResult {

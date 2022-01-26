@@ -3,9 +3,7 @@
 #include <mutex>                                 // for lock_guard
 #include <exception>                             // for exception
 #include <iostream>                              // for string, operator<<
-#include <nlohmann/detail/json_ref.hpp>          // for json_ref
-#include <stdexcept>                             // for runtime_error
-#include <type_traits>                           // for remove_extent_t, rem...
+#include <nlohmann/json.hpp>                     // for json_ref
 #include "teckos/global.h"                       // for global
 
 teckos::client::client(bool use_async_events) noexcept:
@@ -75,11 +73,16 @@ teckos::client::client(bool use_async_events) noexcept:
 #else
   // Create new websocket client and attach handler
   ws = std::make_shared<WebSocketClient>();
-  ws->set_message_handler([&](const websocket_incoming_message &ret_msg) {
-    auto msg = ret_msg.extract_string().get();
-    handleMessage(msg);
+  ws->set_message_handler([&](const web::websockets::client::websocket_incoming_message &ret_msg) {
+    try {
+      auto msg = ret_msg.extract_string().get();
+      handleMessage(msg);
+    } catch(std::exception& err ) {
+      //TODO: Discuss error handling here
+      std::cerr << "Invalid message from server: " << err.what() << std::endl;
+    }
   });
-  ws->set_close_handler([&](websocket_close_status close_status,
+  ws->set_close_handler([&](web::websockets::client::websocket_close_status close_status,
                             const utility::string_t &reason,
                             const std::error_code &/*error*/) {
     handleClose((int) close_status, utility::conversions::to_utf8string(reason));
@@ -148,21 +151,26 @@ void teckos::client::connect() {
   // We have to do this sync step per step,
   // since a destruction of this object while
   // connecting would lead to undefined behavior
-  ws->connect(utility::conversions::to_string_t(info.url)).get();
-  connected = true;
-  if (connectedHandler) {
-    if (async_events) {
-      threadPool.emplace_back([this]() {
+  try {
+    ws->connect(utility::conversions::to_string_t(info.url)).get();
+    connected = true;
+    if (connectedHandler) {
+      if (async_events) {
+        threadPool.emplace_back([this]() {
+          connectedHandler();
+        });
+      } else {
         connectedHandler();
-      });
-    } else {
-      connectedHandler();
+      }
     }
-  }
-  if (info.hasJwt) {
-    nlohmann::json p = info.payload;
-    p["token"] = info.jwt;
-    return this->send("token", p);
+    if (info.hasJwt) {
+      nlohmann::json p = info.payload;
+      p["token"] = info.jwt;
+      return this->send("token", p);
+    }
+  } catch(std::exception& err) {
+    //TODO: Discuss error handling here
+    std::cerr << "Could not connect: " << err.what() << std::endl;
   }
 }
 #endif
@@ -174,7 +182,7 @@ void teckos::client::disconnect() noexcept {
 #ifdef USE_IX_WEBSOCKET
       ws->stop(1000, "Normal Closure");
 #else
-      ws->close(websocket_close_status::normal);
+      ws->close(web::websockets::client::websocket_close_status::normal);
 #endif
     }
     connected = false;
@@ -196,93 +204,98 @@ void teckos::client::handleClose(int code, const std::string &/*reason*/) {
   if (disconnectedHandler) {
     if (async_events) {
       threadPool.emplace_back([this, abnormal_exit]() {
-        disconnectedHandler(std::move(abnormal_exit));
+        disconnectedHandler(abnormal_exit);
       });
     } else {
-      disconnectedHandler(std::move(abnormal_exit));
+      disconnectedHandler(abnormal_exit);
     }
   }
 }
 
-void teckos::client::handleMessage(const std::string &msg) {
+void teckos::client::handleMessage(const std::string &msg) noexcept {
   if (msg == "hey")
     return;
-  nlohmann::json j = nlohmann::json::parse(msg);
-  const PacketType type = j["type"];
-  switch (type) {
-    case PacketType::EVENT: {
-      const nlohmann::json jsonData = j["data"];
-      if (jsonData.is_array() && !jsonData.empty()) {
-        std::vector<nlohmann::json> data = j["data"];
-        const std::string event = data[0];
-        if (event == "ready") {
-          // ready is sent by server to inform that client is connected and the
-          // token valid
-          authenticated = true;
-          if (reconnecting) {
-            if (reconnectedHandler) {
-              if (async_events) {
-                threadPool.emplace_back([this]() {
+  try {
+    nlohmann::json j = nlohmann::json::parse(msg);
+    const PacketType type = j["type"];
+    switch (type) {
+      case PacketType::EVENT: {
+        const nlohmann::json jsonData = j["data"];
+        if (jsonData.is_array() && !jsonData.empty()) {
+          std::vector<nlohmann::json> data = j["data"];
+          const std::string event = data[0];
+          if (event == "ready") {
+            // ready is sent by server to inform that client is connected and the
+            // token valid
+            authenticated = true;
+            if (reconnecting) {
+              if (reconnectedHandler) {
+                if (async_events) {
+                  threadPool.emplace_back([this]() {
+                    reconnectedHandler();
+                  });
+                } else {
                   reconnectedHandler();
-                });
-              } else {
-                reconnectedHandler();
+                }
               }
-            }
-          } else {
-            if (connectedHandler) {
-              if (async_events) {
-                threadPool.emplace_back([this]() {
+            } else {
+              if (connectedHandler) {
+                if (async_events) {
+                  threadPool.emplace_back([this]() {
+                    connectedHandler();
+                  });
+                } else {
                   connectedHandler();
-                });
-              } else {
-                connectedHandler();
+                }
               }
             }
+            break;
           }
-          break;
-        }
-        // Inform message handler
-        if (msgHandler) {
-          // Spawn a thread handling the assigned callbacks
-          if (async_events) {
-            threadPool.emplace_back([this, data]() {
-              msgHandler(std::move(data));
-            });
-          } else {
-            msgHandler(data);
+          // Inform message handler
+          if (msgHandler) {
+            // Spawn a thread handling the assigned callbacks
+            if (async_events) {
+              threadPool.emplace_back([this, data]() {
+                msgHandler(std::move(data));
+              });
+            } else {
+              msgHandler(data);
+            }
           }
-        }
-        // Inform event handler
-        if (eventHandlers.count(event) > 0) {
-          nlohmann::json payload;
-          if (data.size() > 1)
-            payload = data[1];
-          if (async_events) {
-            threadPool.emplace_back([this, &event, &payload]() {
+          // Inform event handler
+          if (eventHandlers.count(event) > 0) {
+            nlohmann::json payload;
+            if (data.size() > 1)
+              payload = data[1];
+            if (async_events) {
+              threadPool.emplace_back([this, &event, &payload]() {
+                eventHandlers[event](payload);
+              });
+            } else {
               eventHandlers[event](payload);
-            });
-          } else {
-            eventHandlers[event](payload);
+            }
           }
         }
+        break;
       }
-      break;
-    }
-    case PacketType::ACK: {
-      // type === PacketType::ACK
-      // We have to call the function
-      const int32_t id = j["id"];
-      if (acks.count(id) > 0) {
-        acks[id](j["data"].get<std::vector<nlohmann::json >>());
-        acks.erase(id);
+      case PacketType::ACK: {
+        // type === PacketType::ACK
+        // We have to call the function
+        const int32_t id = j["id"];
+        if (acks.count(id) > 0) {
+          acks[id](j["data"].get<std::vector<nlohmann::json >>());
+          acks.erase(id);
+        }
+        break;
       }
-      break;
+      default: {
+        std::cerr << "Warning: unknown packet type received: " << std::endl;
+        break;
+      }
     }
-    default: {
-      std::cerr << "Warning: unknown packet type received: " << std::endl;
-      break;
-    }
+  } catch(std::exception& err) {
+    // TODO: Discuss error handling here
+    std::cerr << "Could not parse message from server as JSON: " << err.what() << std::endl;
   }
 }
 
@@ -341,7 +354,7 @@ void teckos::client::sendPackage(teckos::packet p) {
 #ifdef USE_IX_WEBSOCKET
   ws->send(jsonMsg.dump());
 #else
-  websocket_outgoing_message msg;
+  web::websockets::client::websocket_outgoing_message msg;
   msg.set_utf8_message(jsonMsg.dump());
   ws->send(msg);
 #endif

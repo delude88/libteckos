@@ -24,11 +24,10 @@
 #include "ixwebsocket/IXWebSocketErrorInfo.h"    // for WebSocketErrorInfo
 #include "ixwebsocket/IXWebSocketMessage.h"      // for WebSocketMessagePtr
 #include "ixwebsocket/IXWebSocketMessageType.h"  // for WebSocketMessageType
-typedef ix::WebSocket WebSocketClient;
+using WebSocketClient = ix::WebSocket;
 #else
 #include <cpprest/ws_client.h>
-using namespace web::websockets::client;
-typedef websocket_callback_client WebSocketClient;
+using WebSocketClient = web::websockets::client::websocket_callback_client;
 #endif
 
 namespace teckos {
@@ -110,7 +109,7 @@ class client {
 
   void handleClose(int code, const std::string &reason);
 
-  void handleMessage(const std::string &msg);
+  void handleMessage(const std::string &msg) noexcept;
 
   void send_json(const nlohmann::json &args) noexcept(false);
 
