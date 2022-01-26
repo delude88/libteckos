@@ -49,21 +49,21 @@ struct connection_info {
   nlohmann::json payload;
 };
 
-typedef const std::vector<nlohmann::json> &Result;
-typedef std::function<void(Result)> Callback;
+using Result = const std::vector<nlohmann::json> &;
+using Callback = std::function<void(Result)>;
 
 class client {
  public:
-  client(bool async_events = false) noexcept;
+  explicit client(bool async_events = false) noexcept;
   ~client();
 
   void setReconnect(bool reconnect) noexcept;
 
-  bool shouldReconnect() const noexcept;
+  [[nodiscard]] bool shouldReconnect() const noexcept;
 
   void sendPayloadOnReconnect(bool sendPayloadOnReconnect) noexcept;
 
-  bool isSendingPayloadOnReconnect() const noexcept;
+  [[nodiscard]] bool isSendingPayloadOnReconnect() const noexcept;
 
   void setTimeout(std::chrono::milliseconds ms) noexcept;
 
@@ -83,14 +83,33 @@ class client {
 
   void off(const std::string &event);
 
+  /**
+   * Connect to the given url.
+   * When this client is already connected, it will disconnect first.
+   * This method may forward exceptions from underlying services.
+   * @param url
+   */
   void connect(const std::string &url) noexcept(false);
 
+  /**
+   * Connect to the given url using an JSON Web Token and initial payload.
+   * When this client is already connected, it will disconnect first.
+   * This method may forward exceptions from underlying services.
+   * @param url
+   * @param jwt
+   * @param initialPayload
+   */
   void connect(const std::string &url, const std::string &jwt,
                const nlohmann::json &initialPayload) noexcept(false);
 
-  bool isConnected() const noexcept;
+  [[nodiscard]] bool isConnected() const noexcept;
 
-  void disconnect() noexcept;
+  /**
+   * This will disconnect from the server.
+   * If the client is not connected, the method will just return.
+   * This method may forwards exceptions from underlying services.
+   */
+  void disconnect();
 
   void setMessageHandler(
       const std::function<void(const std::vector<nlohmann::json> &)> &
@@ -107,11 +126,13 @@ class client {
  protected:
   void connect();
 
+  void reconnect();
+
   void handleClose(int code, const std::string &reason);
 
   void handleMessage(const std::string &msg) noexcept;
 
-  void send_json(const nlohmann::json &args) noexcept(false);
+  [[maybe_unused]] void send_json(const nlohmann::json &args) noexcept(false);
 
   void sendPackage(packet p) noexcept(false);
 
@@ -128,7 +149,7 @@ class client {
   uint32_t fnId = 0;
   std::map<uint32_t, Callback>
       acks;
-  std::shared_ptr<WebSocketClient> ws;
+  std::unique_ptr<WebSocketClient> ws;
   bool reconnecting;
   bool connected;
   bool authenticated;
@@ -136,6 +157,10 @@ class client {
   connection_settings settings;
   connection_info info;
   std::vector<std::thread> threadPool;
+
+#ifndef USE_IX_WEBSOCKET
+  std::thread reconnectThread;
+#endif
 };
 } // namespace teckos
 

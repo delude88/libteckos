@@ -3,7 +3,7 @@
 //
 #pragma once
 
-#include <iosfwd>                 // for string
+#include <string>                 // for string
 #include <map>                    // for map, map<>::value_compare
 #include <nlohmann/json.hpp>      // for basic_json
 
@@ -13,7 +13,7 @@ struct RestResult {
   std::string statusMessage;
   nlohmann::json body;
 };
-typedef std::map<std::string, std::string> Header;
+using Header = std::map<std::string, std::string>;
 class rest {
  public:
   static RestResult Get(const std::string &url, const Header header = Header());
