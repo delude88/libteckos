@@ -159,7 +159,8 @@ class client {
   std::vector<std::thread> threadPool;
 
 #ifndef USE_IX_WEBSOCKET
-  std::thread reconnectThread;
+  std::thread connectionThread;
+  std::thread reconnectionThread;
 #endif
 };
 } // namespace teckos

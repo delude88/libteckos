@@ -130,52 +130,60 @@ void teckos::client::connect() {
 }
 #else
 void teckos::client::connect() {
-  // Connect
-  connected = false;
-  authenticated = false;
-  // We have to do this sync step per step,
-  // since a destruction of this object while
-  // connecting would lead to undefined behavior
-  ws = std::make_unique<WebSocketClient>();
-  ws->set_message_handler([&](const web::websockets::client::websocket_incoming_message &ret_msg) {
-    try {
-      auto msg = ret_msg.extract_string().get();
-      handleMessage(msg);
-    } catch (std::exception &err) {
-      //TODO: Discuss error handling here
-      std::cerr << "Invalid message from server: " << err.what() << std::endl;
-    } catch(...) {
-      std::cerr << "Unhandled exception occurred when parsing incoming message or calling handleMessage" << std::endl;
-    }
-  });
-  ws->set_close_handler([&](web::websockets::client::websocket_close_status close_status,
-                            const utility::string_t &reason,
-                            const std::error_code &/*error*/) {
-    handleClose((int) close_status, utility::conversions::to_utf8string(reason));
-  });
-  try {
-    ws->connect(utility::conversions::to_string_t(info.url)).get();
-    connected = true;
-    if (connectedHandler) {
-      if (async_events) {
-        threadPool.emplace_back([this]() {
-          connectedHandler();
-        });
-      } else {
-        connectedHandler();
-      }
-    }
-    if (info.hasJwt) {
-      nlohmann::json p = info.payload;
-      p["token"] = info.jwt;
-      this->send("token", p);
-    }
-  } catch(web::websockets::client::websocket_exception &e) {
-    std::cerr << e.what() << std::endl;
-    handleClose(e.error_code().value(), e.what());
-  } catch(...) {
-    std::cerr << "Unhandled exception occurred when connecting or while connected" << std::endl;
+  if(connectionThread.joinable()) {
+    connectionThread.join();
   }
+  connectionThread = std::thread([this]{
+    // Connect
+    connected = false;
+    authenticated = false;
+    // We have to do this sync step per step,
+    // since a destruction of this object while
+    // connecting would lead to undefined behavior
+    std::cout << "Recreating ws object using thread" << std::this_thread::get_id() << std::endl;
+    ws = std::make_unique<WebSocketClient>();
+    std::cout << "Recreated ws object" << std::endl;
+    ws->set_message_handler([&](const web::websockets::client::websocket_incoming_message &ret_msg) {
+      try {
+        auto msg = ret_msg.extract_string().get();
+        handleMessage(msg);
+      } catch (std::exception &err) {
+        //TODO: Discuss error handling here
+        std::cerr << "Invalid message from server: " << err.what() << std::endl;
+      } catch(...) {
+        std::cerr << "Unhandled exception occurred when parsing incoming message or calling handleMessage" << std::endl;
+      }
+    });
+    ws->set_close_handler([&](web::websockets::client::websocket_close_status close_status,
+                              const utility::string_t &reason,
+                              const std::error_code &/*error*/) {
+      handleClose((int) close_status, utility::conversions::to_utf8string(reason));
+    });
+    try {
+      std::cout << "Connecting" << std::endl;
+      ws->connect(utility::conversions::to_string_t(info.url)).get();
+      std::cout << "Connected" << std::endl;
+      connected = true;
+      if (connectedHandler) {
+        if (async_events) {
+          threadPool.emplace_back([this]() {
+            connectedHandler();
+          });
+        } else {
+          connectedHandler();
+        }
+      }
+      if (info.hasJwt) {
+        nlohmann::json p = info.payload;
+        p["token"] = info.jwt;
+        this->send("token", p);
+      }
+    } catch(web::websockets::client::websocket_exception &e) {
+      handleClose(e.error_code().value(), e.what());
+    } catch(...) {
+      std::cerr << "Unhandled exception occurred when connecting or while connected" << std::endl;
+    }
+  });
 }
 #endif
 
@@ -186,8 +194,11 @@ void teckos::client::disconnect() {
       ws->stop(1000, "Normal Closure");
 #else
       // First close reconnecting thread
-      if(reconnectThread.joinable()) {
-        reconnectThread.join();
+      if(connectionThread.joinable()) {
+        connectionThread.join();
+      }
+      if(reconnectionThread.joinable()) {
+        reconnectionThread.join();
       }
       // Now close connecting, if it is still there
       if (ws) {
@@ -198,7 +209,9 @@ void teckos::client::disconnect() {
     connected = false;
 }
 
-void teckos::client::handleClose(int code, const std::string &/*reason*/) {
+void teckos::client::handleClose(int code, const std::string &reason) {
+  std::cout << "Connection closed by [" << code << "]: " << reason << std::endl;
+  std::cout << "Handling the close inside the thread" << std::this_thread::get_id() << std::endl;
   connected = false;
   authenticated = false;
   auto abnormal_exit = code != 1000;
@@ -441,19 +454,30 @@ void teckos::client::on_disconnected(
 }
 
 void teckos::client::reconnect() {
-  reconnecting = true;
   // IX Websocket is handling the reconnect itself
 #ifndef USE_IX_WEBSOCKET
   // We have to connect again, but this time we are using another thread (since this will be called by the websocket client itself (!)
-  if (reconnectThread.joinable()) {
+  //if (reconnectThread.joinable()) {
     // How come this? Reconnecting without having disconnected by server before (so no onClose called before)?
-    std::cerr << "Had to join the reconnecting thread - this should not happen";
-    reconnectThread.join();
-  }
+    //std::cerr << "Had to join the reconnecting thread - this should not happen";
+    //reconnectThread.join();
+  //}
   // Usually reconnect() is called by handleClose on the websocketpp client thread.
   // So we call connect() inside a separate thread (since we are replacing the ws object inside connect).
-  reconnectThread = std::thread([this] {
-    connect();
-  });
+  //reconnectThread = std::thread(([this] {
+  //  connect();
+  //}));
+  if(!connected) {
+    if(reconnectionThread.joinable()) {
+      reconnectionThread.join();
+    }
+    reconnectionThread = std::thread([this]{
+      std::cout << "Reconnecting in " << timeout.count() << "ms" << std::endl;
+      reconnecting = true;
+      std::this_thread::sleep_for(timeout);
+      std::cout << "Reconnecting now" << std::endl;
+      connect();
+    });
+  }
 #endif
 }
