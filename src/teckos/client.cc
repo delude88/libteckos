@@ -144,6 +144,8 @@ void teckos::client::connect() {
     } catch (std::exception &err) {
       //TODO: Discuss error handling here
       std::cerr << "Invalid message from server: " << err.what() << std::endl;
+    } catch(...) {
+      std::cerr << "Unhandled exception occurred when parsing incoming message or calling handleMessage" << std::endl;
     }
   });
   ws->set_close_handler([&](web::websockets::client::websocket_close_status close_status,
@@ -151,21 +153,28 @@ void teckos::client::connect() {
                             const std::error_code &/*error*/) {
     handleClose((int) close_status, utility::conversions::to_utf8string(reason));
   });
-  ws->connect(utility::conversions::to_string_t(info.url)).get();
-  connected = true;
-  if (connectedHandler) {
-    if (async_events) {
-      threadPool.emplace_back([this]() {
+  try {
+    ws->connect(utility::conversions::to_string_t(info.url)).get();
+    connected = true;
+    if (connectedHandler) {
+      if (async_events) {
+        threadPool.emplace_back([this]() {
+          connectedHandler();
+        });
+      } else {
         connectedHandler();
-      });
-    } else {
-      connectedHandler();
+      }
     }
-  }
-  if (info.hasJwt) {
-    nlohmann::json p = info.payload;
-    p["token"] = info.jwt;
-    this->send("token", p);
+    if (info.hasJwt) {
+      nlohmann::json p = info.payload;
+      p["token"] = info.jwt;
+      this->send("token", p);
+    }
+  } catch(web::websockets::client::websocket_exception &e) {
+    std::cerr << e.what() << std::endl;
+    handleClose(e.error_code().value(), e.what());
+  } catch(...) {
+    std::cerr << "Unhandled exception occurred when connecting or while connected" << std::endl;
   }
 }
 #endif
