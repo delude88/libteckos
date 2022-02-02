@@ -19,50 +19,61 @@ private:
 };
 
 teckos::client::client(bool use_async_events) noexcept
-    : reconnecting(false), connected(false), authenticated(false),
-      use_async_events(use_async_events)
+    : was_connected_before_(false), reconnecting_(false), connected_(false),
+      authenticated_(false), use_async_events_(use_async_events)
 {
   teckos::global::init();
 #ifdef USE_IX_WEBSOCKET
   ix::initNetSystem();
-  ws = std::make_unique<WebSocketClient>();
-  ws->enablePong();
-  ws->setOnMessageCallback([this](const ix::WebSocketMessagePtr& msg) {
+  ws_ = std::make_unique<WebSocketClient>();
+  ws_->enablePong();
+  ws_->setOnMessageCallback([this](const ix::WebSocketMessagePtr& msg) {
     switch(msg->type) {
     case ix::WebSocketMessageType::Message: {
-      if(connected) {
+      if(connected_) {
         handleMessage(msg->str);
       }
       break;
     }
     case ix::WebSocketMessageType::Close: {
-      handleClose(msg->closeInfo.code, msg->closeInfo.reason);
+      connected_ = false;
+      authenticated_ = false;
+      auto abnormal_exit = msg->closeInfo.code != 1000;
+      if (disconnected_handler_) {
+        if (use_async_events_) {
+          event_handler_thread_pool_.emplace_back([this, abnormal_exit]() {
+            disconnected_handler_(abnormal_exit);
+          });
+        } else {
+          disconnected_handler_(abnormal_exit);
+        }
+      }
       break;
     }
     case ix::WebSocketMessageType::Open: {
-      connected = true;
-      if(info.hasJwt) {
+      connected_ = true;
+      if(info_.hasJwt) {
         // Not connected without the jwt being validated
-        nlohmann::json p = info.payload;
-        p["token"] = info.jwt;
-        return this->send("token", p);
+        nlohmann::json p = info_.payload;
+        p["token"] = info_.jwt;
+        return send("token", p);
       } else {
-        authenticated = true;
+        authenticated_ = true;
         // Without jwt we are connected now
-        if(reconnecting) {
-          if(reconnectedHandler) {
-            if(async_events) {
-              threadPool.emplace_back([this]() { reconnectedHandler(); });
+        if(reconnecting_) {
+          if(reconnected_handler_) {
+            if(use_async_events_) {
+              event_handler_thread_pool_.emplace_back([this]() { reconnected_handler_(); });
             } else {
-              reconnectedHandler();
+              reconnected_handler_();
             }
           }
         } else {
-          if(connectedHandler) {
-            if(async_events) {
-              threadPool.emplace_back([this]() { connectedHandler(); });
+          if(connected_handler_) {
+            if(use_async_events_) {
+              event_handler_thread_pool_.emplace_back([this]() { connected_handler_(); });
             } else {
-              connectedHandler();
+              connected_handler_();
             }
           }
         }
@@ -99,19 +110,19 @@ void teckos::client::on(
     const std::function<void(const nlohmann::json&)>& handler)
 {
   // TODO: Support multiple handlers for a single event
-  eventHandlers[event] = handler;
+  event_handlers_[event] = handler;
 }
 
 void teckos::client::off(const std::string& event)
 {
-  eventHandlers.erase(event);
+  event_handlers_.erase(event);
 }
 
 void teckos::client::connect(const std::string& url) noexcept(false)
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
-  info = {url, false, "", ""};
-  if(connected) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  info_ = {url, false, "", ""};
+  if(connected_) {
     disconnect();
   }
   was_connected_before_ = false;
@@ -122,9 +133,9 @@ void teckos::client::connect(
     const std::string& url, const std::string& jwt,
     const nlohmann::json& initialPayload) noexcept(false)
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
-  info = {url, true, jwt, initialPayload};
-  if(connected) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  info_ = {url, true, jwt, initialPayload};
+  if(connected_) {
     disconnect();
   }
   was_connected_before_ = false;
@@ -135,25 +146,25 @@ void teckos::client::connect(
 void teckos::client::connect()
 {
   // Create new websocket client and attach handler
-  ws->setUrl(info.url);
+  ws_->setUrl(info_.url);
   // Connect
-  if(settings.reconnect) {
-    ws->enableAutomaticReconnection();
+  if(settings_.reconnect) {
+    ws_->enableAutomaticReconnection();
   } else {
-    ws->disableAutomaticReconnection();
+    ws_->disableAutomaticReconnection();
   }
-  connected = false;
-  authenticated = false;
-  ws->start();
+  connected_ = false;
+  authenticated_ = false;
+  ws_->start();
 }
 #else
 void teckos::client::connect()
 {
   // Connect
-  connected = false;
-  authenticated = false;
-  ws = std::make_unique<WebSocketClient>();
-  ws->set_message_handler(
+  connected_ = false;
+  authenticated_ = false;
+  ws_ = std::make_unique<WebSocketClient>();
+  ws_->set_message_handler(
       [this](
           const web::websockets::client::websocket_incoming_message& ret_msg) {
         try {
@@ -171,46 +182,46 @@ void teckos::client::connect()
                     << std::endl;
         }
       });
-  ws->set_close_handler(
+  ws_->set_close_handler(
       [this](web::websockets::client::websocket_close_status close_status,
              const utility::string_t& reason,
              const std::error_code& code) {
-      connected = false;
+        connected_ = false;
       if (close_status == web::websockets::client::websocket_close_status::abnormal_close) {
-        if(!reconnecting && was_connected_before_) {
+        if(!reconnecting_ && was_connected_before_) {
           // Start reconnecting
           startReconnecting();
         }
       } else {
         // Graceful disconnect, inform handler (if any)
-        if(disconnectedHandler) {
-          if(use_async_events) {
-            event_handler_thread_pool_.emplace_back([this]() { disconnectedHandler(true); });
+        if(disconnected_handler_) {
+          if(use_async_events_) {
+            event_handler_thread_pool_.emplace_back([this]() { disconnected_handler_(true); });
           } else {
-            disconnectedHandler(true);
+            disconnected_handler_(true);
           }
         }
       }
       });
   try {
-    ws->connect(utility::conversions::to_string_t(info.url)).wait();
-    connected = true;
+    ws_->connect(utility::conversions::to_string_t(info_.url)).wait();
+    connected_ = true;
     was_connected_before_ = true;
-    if(connectedHandler) {
-      if(use_async_events) {
-        event_handler_thread_pool_.emplace_back([this]() { connectedHandler(); });
+    if(connected_handler_) {
+      if(use_async_events_) {
+        event_handler_thread_pool_.emplace_back([this]() { connected_handler_(); });
       } else {
-        connectedHandler();
+        connected_handler_();
       }
     }
-    if(info.hasJwt) {
-      nlohmann::json payload = info.payload;
-      payload["token"] = info.jwt;
-      this->send("token", payload);
+    if(info_.hasJwt) {
+      nlohmann::json payload = info_.payload;
+      payload["token"] = info_.jwt;
+      send("token", payload);
     }
   }
   catch(web::websockets::client::websocket_exception& e) {
-    connected = false;
+    connected_ = false;
     throw ConnectionException(e.error_code().value(), e.what());
   }
 }
@@ -218,21 +229,21 @@ void teckos::client::connect()
 
 void teckos::client::disconnect()
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 #ifndef USE_IX_WEBSOCKET
   stopReconnecting();
 #endif
-  if(connected) {
+  if(connected_) {
 #ifdef USE_IX_WEBSOCKET
-    ws->stop(1000, "Normal Closure");
+    ws_->stop(1000, "Normal Closure");
 #else
     // Now close connecting, if it is still there
-    if(ws) {
-      ws->close(web::websockets::client::websocket_close_status::normal).wait();
+    if(ws_) {
+      ws_->close(web::websockets::client::websocket_close_status::normal).wait();
     }
 #endif
   }
-  connected = false;
+  connected_ = false;
 }
 
 void teckos::client::handleMessage(const std::string& msg) noexcept
@@ -254,46 +265,47 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
         if(event == "ready") {
           // ready is sent by server to inform that client is connected and the
           // token valid
-          authenticated = true;
-          if(reconnecting) {
-            if(reconnectedHandler) {
-              if(use_async_events) {
-                event_handler_thread_pool_.emplace_back([this]() { reconnectedHandler(); });
+          authenticated_ = true;
+          if(reconnecting_) {
+            if(reconnected_handler_) {
+              if(use_async_events_) {
+                event_handler_thread_pool_.emplace_back([this]() { reconnected_handler_(); });
               } else {
-                reconnectedHandler();
+                reconnected_handler_();
               }
             }
           } else {
-            if(connectedHandler) {
-              if(use_async_events) {
-                event_handler_thread_pool_.emplace_back([this]() { connectedHandler(); });
+            if(connected_handler_) {
+              if(use_async_events_) {
+                event_handler_thread_pool_.emplace_back([this]() { connected_handler_(); });
               } else {
-                connectedHandler();
+                connected_handler_();
               }
             }
           }
           break;
         }
         // Inform message handler
-        if(msgHandler) {
+        if(msg_handler_) {
           // Spawn a thread handling the assigned callbacks
-          if(use_async_events) {
+          if(use_async_events_) {
             event_handler_thread_pool_.emplace_back(
-                [this, data]() { msgHandler(std::move(data)); });
+                [this, data]() { msg_handler_(std::move(data)); });
           } else {
-            msgHandler(data);
+            msg_handler_(data);
           }
         }
         // Inform event handler
-        if(eventHandlers.count(event) > 0) {
+        if(event_handlers_.count(event) > 0) {
           nlohmann::json payload;
           if(data.size() > 1)
             payload = data[1];
-          if(use_async_events) {
+          if(use_async_events_) {
             event_handler_thread_pool_.emplace_back(
-                [this, &event, &payload]() { eventHandlers[event](payload); });
+                [this, &event, &payload]() {
+              event_handlers_[event](payload); });
           } else {
-            eventHandlers[event](payload);
+            event_handlers_[event](payload);
           }
         }
       }
@@ -303,9 +315,9 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
       // type === PacketType::ACK
       // We have to call the function
       const int32_t id = j["id"];
-      if(acks.count(id) > 0) {
-        acks[id](j["data"].get<std::vector<nlohmann::json>>());
-        acks.erase(id);
+      if(acks_.count(id) > 0) {
+        acks_[id](j["data"].get<std::vector<nlohmann::json>>());
+        acks_.erase(id);
       }
       break;
     }
@@ -326,21 +338,21 @@ void teckos::client::setMessageHandler(
     const std::function<void(const std::vector<nlohmann::json>&)>&
         handler) noexcept
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   if(handler) {
     auto func = [handler](const std::vector<nlohmann::json>& json) {
       handler(json);
     };
-    msgHandler = func;
+    msg_handler_ = func;
   } else {
-    msgHandler = nullptr;
+    msg_handler_ = nullptr;
   }
 }
 
 void teckos::client::send(const std::string& event)
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
-  if(!connected && !authenticated && event != "token") {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  if(!connected_ && !authenticated_ && event != "token") {
     throw std::runtime_error("Not connected");
   }
   return sendPackage({PacketType::EVENT, {event, {}}, std::nullopt});
@@ -348,8 +360,8 @@ void teckos::client::send(const std::string& event)
 
 void teckos::client::send(const std::string& event, const nlohmann::json& args)
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
-  if(!connected && !authenticated && event != "token") {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  if(!connected_ && !authenticated_ && event != "token") {
     throw std::runtime_error("Not connected");
   }
   return sendPackage({PacketType::EVENT, {event, args}, std::nullopt});
@@ -358,37 +370,37 @@ void teckos::client::send(const std::string& event, const nlohmann::json& args)
 void teckos::client::send(const std::string& event, const nlohmann::json& args,
                           Callback callback)
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
-  if(!connected && !authenticated && event != "token") {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  if(!connected_ && !authenticated_ && event != "token") {
     throw std::runtime_error("Not connected");
   }
-  acks.insert({fnId, std::move(callback)});
-  return sendPackage({PacketType::EVENT, {event, args}, fnId++});
+  acks_.insert({fn_id_, std::move(callback)});
+  return sendPackage({PacketType::EVENT, {event, args}, fn_id_++});
 }
 
 [[maybe_unused]] void teckos::client::send_json(const nlohmann::json& args)
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   return sendPackage({PacketType::EVENT, args, std::nullopt});
 }
 
-void teckos::client::sendPackage(teckos::packet p)
+void teckos::client::sendPackage(teckos::packet packet)
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
-  nlohmann::json jsonMsg = {{"type", p.type}, {"data", p.data}};
-  if(p.number) {
-    jsonMsg["id"] = *p.number;
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  nlohmann::json json_msg = {{"type", packet.type}, {"data", packet.data}};
+  if(packet.number) {
+    json_msg["id"] = *packet.number;
   }
 #ifdef DEBUG_TECKOS_SEND
-  std::cout << "teckos:send >> " << jsonMsg.dump() << std::endl;
+  std::cout << "teckos:send >> " << json_msg.dump() << std::endl;
 #endif
 #ifdef USE_IX_WEBSOCKET
-  ws->send(jsonMsg.dump());
+  ws_->send(json_msg.dump());
 #else
   web::websockets::client::websocket_outgoing_message msg;
-  msg.set_utf8_message(jsonMsg.dump());
+  msg.set_utf8_message(json_msg.dump());
   try {
-    ws->send(msg).get();
+    ws_->send(msg).get();
   }
   catch(std::exception& err) {
     // Usually an exception is thrown here, when the connection has been
@@ -399,74 +411,74 @@ void teckos::client::sendPackage(teckos::packet p)
 #endif
 }
 
-void teckos::client::setTimeout(std::chrono::milliseconds ms) noexcept
+void teckos::client::setTimeout(std::chrono::milliseconds milliseconds) noexcept
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
-  timeout = ms;
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  timeout_ = milliseconds;
 }
 
 [[maybe_unused]] std::chrono::milliseconds
 teckos::client::getTimeout() const noexcept
 {
-  return timeout;
+  return timeout_;
 }
 
 bool teckos::client::isConnected() const noexcept
 {
-  return connected && authenticated;
+  return connected_ && authenticated_;
 }
 
 void teckos::client::setReconnect(bool shallReconnect) noexcept
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
-  settings.reconnect = shallReconnect;
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  settings_.reconnect = shallReconnect;
 }
 
 bool teckos::client::shouldReconnect() const noexcept
 {
-  return settings.reconnect;
+  return settings_.reconnect;
 }
 
 void teckos::client::sendPayloadOnReconnect(
     bool sendPayloadOnReconnect) noexcept
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
-  settings.sendPayloadOnReconnect = sendPayloadOnReconnect;
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  settings_.sendPayloadOnReconnect = sendPayloadOnReconnect;
 }
 
 [[maybe_unused]] bool
 teckos::client::isSendingPayloadOnReconnect() const noexcept
 {
-  return settings.sendPayloadOnReconnect;
+  return settings_.sendPayloadOnReconnect;
 }
 
 void teckos::client::on_connected(const std::function<void()>& handler) noexcept
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
-  connectedHandler = handler;
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  connected_handler_ = handler;
 }
 
 void teckos::client::on_reconnected(
     const std::function<void()>& handler) noexcept
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   if(handler) {
     auto func = [handler]() { handler(); };
-    reconnectedHandler = func;
+    reconnected_handler_ = func;
   } else {
-    reconnectedHandler = nullptr;
+    reconnected_handler_ = nullptr;
   }
 }
 
 void teckos::client::on_disconnected(
     const std::function<void(bool)>& handler) noexcept
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   if(handler) {
     auto func = [handler](bool result) { handler(result); };
-    disconnectedHandler = func;
+    disconnected_handler_ = func;
   } else {
-    disconnectedHandler = nullptr;
+    disconnected_handler_ = nullptr;
   }
 }
 
@@ -474,54 +486,54 @@ void teckos::client::on_disconnected(
 void teckos::client::startReconnecting()
 {
   stopReconnecting();
-  reconnecting = true;
-  reconnectionThread = std::thread([this] {
-    int reconnectTries = 0;
-    while(!connected && reconnecting && reconnectTries < 10) {
+  reconnecting_ = true;
+  reconnection_thread_ = std::thread([this] {
+    int reconnect_tries = 0;
+    while(!connected_ && reconnecting_ && reconnect_tries < 10) {
       try {
-          std::cout << "Reconnect (" << reconnectTries << "/" << 10 << ")" << std::endl;
+          std::cout << "Reconnect (" << reconnect_tries << "/" << 10 << ")" << std::endl;
           connect();
       }
       catch (ConnectionException& e) {
           std::cout << "Connection closed by [" << e.code() << "]: " << e.reason() << std::endl;
-          connected = false;
-          authenticated = false;
+          connected_ = false;
+          authenticated_ = false;
       }
       catch (...) {
-          if (disconnectedHandler) {
-              if (use_async_events) {
+          if (disconnected_handler_) {
+              if (use_async_events_) {
                   event_handler_thread_pool_.emplace_back(
-                      [this]() { disconnectedHandler(false); });
+                      [this]() { disconnected_handler_(false); });
               }
               else {
-                  disconnectedHandler(false);
+                disconnected_handler_(false);
               }
           }
       }
 
-      reconnectTries++;
-      std::this_thread::sleep_for(timeout);
+      reconnect_tries++;
+      std::this_thread::sleep_for(timeout_);
     }
-    if(!connected && reconnecting && reconnectTries >= 10) {
+    if(!connected_ && reconnecting_ && reconnect_tries >= 10) {
       // Reconnect tries exhausted, inform client
-      if (disconnectedHandler) {
-        if (use_async_events) {
+      if (disconnected_handler_) {
+        if (use_async_events_) {
           event_handler_thread_pool_.emplace_back(
-              [this]() { disconnectedHandler(false); });
+              [this]() { disconnected_handler_(false); });
         }
         else {
-          disconnectedHandler(false);
+          disconnected_handler_(false);
         }
       }
     }
-    reconnecting = false;
+    reconnecting_ = false;
   });
 }
 
 void teckos::client::stopReconnecting() {
-  reconnecting = false;
-  if(reconnectionThread.joinable()) {
-    reconnectionThread.join();
+  reconnecting_ = false;
+  if(reconnection_thread_.joinable()) {
+    reconnection_thread_.join();
   }
 }
 #endif

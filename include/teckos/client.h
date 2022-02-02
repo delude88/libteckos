@@ -54,7 +54,7 @@ using Callback = std::function<void(Result)>;
 
 class client {
  public:
-  explicit client(bool async_events = false) noexcept;
+  explicit client(bool use_async_events = false) noexcept;
   ~client();
 
   void setReconnect(bool reconnect) noexcept;
@@ -65,7 +65,7 @@ class client {
 
   [[nodiscard]] bool isSendingPayloadOnReconnect() const noexcept;
 
-  void setTimeout(std::chrono::milliseconds ms) noexcept;
+  void setTimeout(std::chrono::milliseconds milliseconds) noexcept;
 
   std::chrono::milliseconds getTimeout() const noexcept;
 
@@ -138,35 +138,32 @@ class client {
 
   [[maybe_unused]] void send_json(const nlohmann::json &args) noexcept(false);
 
-  void sendPackage(packet p) noexcept(false);
+  void sendPackage(packet packet) noexcept(false);
 
  private:
-  std::chrono::milliseconds timeout = std::chrono::milliseconds(500);
+  std::chrono::milliseconds timeout_ = std::chrono::milliseconds(500);
 
-  std::function<void()> connectedHandler;
-  std::function<void()> reconnectedHandler;
-  std::function<void(bool)> disconnectedHandler;
-  std::function<void(const std::vector<nlohmann::json> &)> msgHandler;
+  std::function<void()> connected_handler_;
+  std::function<void()> reconnected_handler_;
+  std::function<void(bool)> disconnected_handler_;
+  std::function<void(const std::vector<nlohmann::json> &)> msg_handler_;
   std::map<std::string, std::function<void(const nlohmann::json &)>>
-      eventHandlers;
-  std::recursive_mutex mutex;
-  uint32_t fnId = 0;
-  std::map<uint32_t, Callback>
-      acks;
-  std::unique_ptr<WebSocketClient> ws;
-  bool connected;
-#ifndef USE_IX_WEBSOCKET
-  std::atomic<bool> reconnecting;
+      event_handlers_;
+  std::recursive_mutex mutex_;
+  uint32_t fn_id_ = 0;
+  std::map<uint32_t, Callback> acks_;
+  std::unique_ptr<WebSocketClient> ws_;
+  std::atomic<bool> connected_;
+  std::atomic<bool> reconnecting_;
   bool was_connected_before_;
-#endif
-  bool authenticated;
-  bool use_async_events;
-  connection_settings settings;
-  connection_info info;
+  bool authenticated_;
+  bool use_async_events_;
+  connection_settings settings_;
+  connection_info info_;
   std::vector<std::thread> event_handler_thread_pool_;
 
 #ifndef USE_IX_WEBSOCKET
-  std::thread reconnectionThread;
+  std::thread reconnection_thread_;
 #endif
 };
 } // namespace teckos
