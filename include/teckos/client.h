@@ -128,8 +128,6 @@ class client {
 
   void reconnect();
 
-  void handleClose(int code, const std::string &reason);
-
   void handleMessage(const std::string &msg) noexcept;
 
   [[maybe_unused]] void send_json(const nlohmann::json &args) noexcept(false);
@@ -150,7 +148,7 @@ class client {
   std::map<uint32_t, Callback>
       acks;
   std::unique_ptr<WebSocketClient> ws;
-  bool reconnecting;
+  std::atomic<bool> reconnecting;
   bool connected;
   bool authenticated;
   bool async_events;
