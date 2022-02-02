@@ -126,7 +126,13 @@ class client {
  protected:
   void connect();
 
-  void reconnect();
+#ifndef USE_IX_WEBSOCKET
+  void startReconnecting();
+#endif
+
+#ifndef USE_IX_WEBSOCKET
+  void stopReconnecting();
+#endif
 
   void handleMessage(const std::string &msg) noexcept;
 
@@ -148,16 +154,18 @@ class client {
   std::map<uint32_t, Callback>
       acks;
   std::unique_ptr<WebSocketClient> ws;
-  std::atomic<bool> reconnecting;
   bool connected;
+#ifndef USE_IX_WEBSOCKET
+  std::atomic<bool> reconnecting;
+  bool was_connected_before_;
+#endif
   bool authenticated;
-  bool async_events;
+  bool use_async_events;
   connection_settings settings;
   connection_info info;
-  std::vector<std::thread> threadPool;
+  std::vector<std::thread> event_handler_thread_pool_;
 
 #ifndef USE_IX_WEBSOCKET
-  std::thread connectionThread;
   std::thread reconnectionThread;
 #endif
 };

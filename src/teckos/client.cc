@@ -6,9 +6,9 @@
 #include <nlohmann/json.hpp> // for json_ref
 #include <utility>           // for move
 
-class ReconnectionException : public std::exception {
+class ConnectionException : public std::exception {
 public:
-    ReconnectionException(int code, std::string const& reason) : code_(code), reason_(reason) {}
+    ConnectionException(int code, std::string const& reason) : code_(code), reason_(reason) {}
 
     int code() const { return code_; }
     std::string reason() const { return reason_;  }
@@ -20,7 +20,7 @@ private:
 
 teckos::client::client(bool use_async_events) noexcept
     : reconnecting(false), connected(false), authenticated(false),
-      async_events(use_async_events)
+      use_async_events(use_async_events)
 {
   teckos::global::init();
 #ifdef USE_IX_WEBSOCKET
@@ -86,7 +86,7 @@ teckos::client::client(bool use_async_events) noexcept
 
 teckos::client::~client()
 {
-  for(auto& item : threadPool) {
+  for(auto& item : event_handler_thread_pool_) {
     if(item.joinable()) {
       item.join();
     }
@@ -114,7 +114,8 @@ void teckos::client::connect(const std::string& url) noexcept(false)
   if(connected) {
     disconnect();
   }
-  reconnect();
+  was_connected_before_ = false;
+  connect();
 }
 
 void teckos::client::connect(
@@ -126,7 +127,8 @@ void teckos::client::connect(
   if(connected) {
     disconnect();
   }
-  reconnect();
+  was_connected_before_ = false;
+  connect();
 }
 
 #ifdef USE_IX_WEBSOCKET
@@ -147,20 +149,10 @@ void teckos::client::connect()
 #else
 void teckos::client::connect()
 {
-  /*if(connectionThread.joinable()) {
-    connectionThread.join();
-  }*/
-  // connectionThread = std::thread([this]{
   // Connect
   connected = false;
   authenticated = false;
-  // We have to do this sync step per step,
-  // since a destruction of this object while
-  // connecting would lead to undefined behavior
-  std::cout << "Recreating ws object using thread" << std::this_thread::get_id()
-            << std::endl;
   ws = std::make_unique<WebSocketClient>();
-  std::cout << "Recreated ws object" << std::endl;
   ws->set_message_handler(
       [this](
           const web::websockets::client::websocket_incoming_message& ret_msg) {
@@ -185,59 +177,58 @@ void teckos::client::connect()
              const std::error_code& code) {
       connected = false;
       if (close_status == web::websockets::client::websocket_close_status::abnormal_close) {
-          reconnect();
+        if(!reconnecting && was_connected_before_) {
+          // Start reconnecting
+          startReconnecting();
+        }
+      } else {
+        // Graceful disconnect, inform handler (if any)
+        if(disconnectedHandler) {
+          if(use_async_events) {
+            event_handler_thread_pool_.emplace_back([this]() { disconnectedHandler(true); });
+          } else {
+            disconnectedHandler(true);
+          }
+        }
       }
-       //     throw ReconnectionException(code.value(), utility::conversions::to_utf8string(reason));
       });
   try {
-    std::cout << "Connecting" << std::endl;
-    ws->connect(utility::conversions::to_string_t(info.url)).get();
-    std::cout << "Connected" << std::endl;
+    ws->connect(utility::conversions::to_string_t(info.url)).wait();
     connected = true;
+    was_connected_before_ = true;
     if(connectedHandler) {
-      if(async_events) {
-        threadPool.emplace_back([this]() { connectedHandler(); });
+      if(use_async_events) {
+        event_handler_thread_pool_.emplace_back([this]() { connectedHandler(); });
       } else {
         connectedHandler();
       }
     }
     if(info.hasJwt) {
-      nlohmann::json p = info.payload;
-      p["token"] = info.jwt;
-      this->send("token", p);
+      nlohmann::json payload = info.payload;
+      payload["token"] = info.jwt;
+      this->send("token", payload);
     }
   }
   catch(web::websockets::client::websocket_exception& e) {
-      connected = false;
-    throw ReconnectionException(e.error_code().value(), e.what());
+    connected = false;
+    throw ConnectionException(e.error_code().value(), e.what());
   }
-  catch(...) {
-    std::cerr
-        << "Unhandled exception occurred when connecting or while connected"
-        << std::endl;
-  }
-  //});
 }
 #endif
 
 void teckos::client::disconnect()
 {
   std::lock_guard<std::recursive_mutex> lock(mutex);
+#ifndef USE_IX_WEBSOCKET
+  stopReconnecting();
+#endif
   if(connected) {
 #ifdef USE_IX_WEBSOCKET
     ws->stop(1000, "Normal Closure");
 #else
-    // First close reconnecting thread
-    /*if(connectionThread.joinable()) {
-      connectionThread.join();
-    }*/
-    reconnecting = false; // This makes the reconnect thread stop
-    if(reconnectionThread.joinable()) {
-      reconnectionThread.join();
-    }
     // Now close connecting, if it is still there
     if(ws) {
-      ws->close(web::websockets::client::websocket_close_status::normal).get();
+      ws->close(web::websockets::client::websocket_close_status::normal).wait();
     }
 #endif
   }
@@ -266,16 +257,16 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
           authenticated = true;
           if(reconnecting) {
             if(reconnectedHandler) {
-              if(async_events) {
-                threadPool.emplace_back([this]() { reconnectedHandler(); });
+              if(use_async_events) {
+                event_handler_thread_pool_.emplace_back([this]() { reconnectedHandler(); });
               } else {
                 reconnectedHandler();
               }
             }
           } else {
             if(connectedHandler) {
-              if(async_events) {
-                threadPool.emplace_back([this]() { connectedHandler(); });
+              if(use_async_events) {
+                event_handler_thread_pool_.emplace_back([this]() { connectedHandler(); });
               } else {
                 connectedHandler();
               }
@@ -286,8 +277,8 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
         // Inform message handler
         if(msgHandler) {
           // Spawn a thread handling the assigned callbacks
-          if(async_events) {
-            threadPool.emplace_back(
+          if(use_async_events) {
+            event_handler_thread_pool_.emplace_back(
                 [this, data]() { msgHandler(std::move(data)); });
           } else {
             msgHandler(data);
@@ -298,8 +289,8 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
           nlohmann::json payload;
           if(data.size() > 1)
             payload = data[1];
-          if(async_events) {
-            threadPool.emplace_back(
+          if(use_async_events) {
+            event_handler_thread_pool_.emplace_back(
                 [this, &event, &payload]() { eventHandlers[event](payload); });
           } else {
             eventHandlers[event](payload);
@@ -479,58 +470,58 @@ void teckos::client::on_disconnected(
   }
 }
 
-void teckos::client::reconnect()
-{
-  // IX Websocket is handling the reconnect itself
 #ifndef USE_IX_WEBSOCKET
-  // We have to connect again, but this time we are using another thread (since
-  // this will be called by the websocket client itself (!)
-  // if (reconnectThread.joinable()) {
-  // How come this? Reconnecting without having disconnected by server before
-  // (so no onClose called before)?
-  // std::cerr << "Had to join the reconnecting thread - this should not
-  // happen"; reconnectThread.join();
-  //}
-  // Usually reconnect() is called by handleClose on the websocketpp client
-  // thread. So we call connect() inside a separate thread (since we are
-  // replacing the ws object inside connect).
-  // reconnectThread = std::thread(([this] {
-  //  connect();
-  //}));
-  reconnecting = false;
-  if(reconnectionThread.joinable()) {
-    reconnectionThread.join();
-  }
+void teckos::client::startReconnecting()
+{
+  stopReconnecting();
   reconnecting = true;
   reconnectionThread = std::thread([this] {
-    std::cout << "Starting reconnect handler!" << std::endl;
     int reconnectTries = 0;
     while(!connected && reconnecting && reconnectTries < 10) {
-      std::cout << "Reconnecting now" << std::endl;
       try {
+          std::cout << "Reconnect (" << reconnectTries << "/" << 10 << ")" << std::endl;
           connect();
-          reconnectTries++;
       }
-      catch (ReconnectionException& e) {
+      catch (ConnectionException& e) {
           std::cout << "Connection closed by [" << e.code() << "]: " << e.reason() << std::endl;
           connected = false;
           authenticated = false;
       }
       catch (...) {
           if (disconnectedHandler) {
-              if (async_events) {
-                  threadPool.emplace_back(
-                      [this]() { disconnectedHandler(true); });
+              if (use_async_events) {
+                  event_handler_thread_pool_.emplace_back(
+                      [this]() { disconnectedHandler(false); });
               }
               else {
-                  disconnectedHandler(true);
+                  disconnectedHandler(false);
               }
           }
       }
 
+      reconnectTries++;
       std::this_thread::sleep_for(timeout);
+    }
+    if(!connected && reconnecting && reconnectTries >= 10) {
+      // Reconnect tries exhausted, inform client
+      if (disconnectedHandler) {
+        if (use_async_events) {
+          event_handler_thread_pool_.emplace_back(
+              [this]() { disconnectedHandler(false); });
+        }
+        else {
+          disconnectedHandler(false);
+        }
+      }
     }
     reconnecting = false;
   });
-#endif
 }
+
+void teckos::client::stopReconnecting() {
+  reconnecting = false;
+  if(reconnectionThread.joinable()) {
+    reconnectionThread.join();
+  }
+}
+#endif
