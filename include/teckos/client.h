@@ -32,7 +32,7 @@ using WebSocketClient = web::websockets::client::websocket_callback_client;
 
 namespace teckos {
 
-    enum PacketType { EVENT = 0, ACK = 1 };
+    enum class PacketType { EVENT = 0, ACK = 1 };
     struct packet {
         PacketType type;
         nlohmann::json data;
@@ -57,6 +57,11 @@ namespace teckos {
     class not_connected_exception: public std::runtime_error {
       public:
           not_connected_exception() : std::runtime_error("logically not connected, can't send") {}
+    };
+
+    class json_message_error : public std::runtime_error {
+      public:
+          json_message_error(const std::string& what) : std::runtime_error(what) {}
     };
 
     using Result = const std::vector<nlohmann::json>&;
@@ -162,8 +167,8 @@ namespace teckos {
         std::map<std::string, std::function<void(const nlohmann::json&)>> event_handlers_;
         std::mutex event_handler_mutex_; // This locks access to any of the above
 
-        uint32_t fn_id_ = 0;
-        std::map<uint32_t, Callback> acks_;
+        int fn_id_;
+        std::map<int, Callback> acks_;
         std::mutex ack_mutex_;
 
         std::shared_ptr<WebSocketClient> websocket_;

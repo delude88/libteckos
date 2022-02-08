@@ -19,7 +19,7 @@ class ConnectionException : public std::exception {
 };
 
 teckos::client::client()
-    : was_connected_before_(false), reconnecting_(false), connected_(false), authenticated_(false),
+    : fn_id_(0), was_connected_before_(false), reconnecting_(false), connected_(false), authenticated_(false),
       timeout_(std::chrono::milliseconds(500))
 {
     teckos::global::init();
@@ -148,7 +148,8 @@ void teckos::client::connect()
     std::shared_ptr<WebSocketClient> websocket;
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        assert(!websocket_); // You are replacing an existing websocket, is that what you intended? Sure no callbacks are running?
+        assert(!websocket_); // You are replacing an existing websocket, is that what you intended? Sure no callbacks
+                             // are running?
         websocket_ = std::make_shared<WebSocketClient>();
         websocket = websocket_;
     }
@@ -168,7 +169,7 @@ void teckos::client::connect()
         }
     });
     websocket->set_close_handler([this](web::websockets::client::websocket_close_status close_status,
-                                  const utility::string_t& reason, const std::error_code& code) {
+                                        const utility::string_t& reason, const std::error_code& code) {
         connected_ = false;
         if(close_status == web::websockets::client::websocket_close_status::abnormal_close) {
             if(!reconnecting_ && was_connected_before_) {
@@ -226,16 +227,31 @@ void teckos::client::disconnect()
     connected_ = false;
 }
 
+template <typename T>
+T get_json(nlohmann::json const& json, const nlohmann::json::object_t::key_type& key) {
+    return json[key];
+}
+
+template <> int get_json(nlohmann::json const& json, const nlohmann::json::object_t::key_type& key)
+{
+    if (!json[key].is_number_integer()) {
+        throw teckos::json_message_error("expected an integer");
+    }
+    return json[key];
+}
+
 void teckos::client::handleMessage(const std::string& msg) noexcept
 {
-    if(msg == "hey")
+    if(msg == "hey") {
         return;
+    }
 #ifdef DEBUG_TECKOS_RECV
     std::cout << "teckos:receive << " << msg << std::endl;
 #endif
     try {
-        nlohmann::json j = nlohmann::json::parse(msg);
-        const PacketType type = j["type"];
+        auto j = nlohmann::json::parse(msg);
+
+        const PacketType type = static_cast<PacketType>(get_json<int>(j, "type")); // This will throw a json::exception in case the key is not valid
         switch(type) {
         case PacketType::EVENT: {
             const nlohmann::json jsonData = j["data"];
@@ -272,28 +288,31 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
                 std::function<void(const nlohmann::json&)> event_handler;
                 {
                     std::lock_guard<std::mutex> lock(event_handler_mutex_);
-                    if (event_handlers_.count(event) > 0) {
+                    if(event_handlers_.count(event) > 0) {
                         event_handler = event_handlers_[event];
                     }
                 }
                 if(event_handler) {
                     nlohmann::json payload;
-                    if (data.size() > 1) {
+                    if(data.size() > 1) {
                         payload = data[1];
                     }
                     event_handler(payload);
                 }
+            }
+            else {
+                throw json_message_error("expected 'data' to be a non-empty array!");
             }
             break;
         }
         case PacketType::ACK: {
             // type === PacketType::ACK
             // We have to call the function
-            const int32_t id = j["id"];
+            auto id = get_json<int>(j, "id");
             Callback callback;
             {
                 std::lock_guard<std::mutex> lock(ack_mutex_);
-                if (acks_.count(id) > 0) {
+                if(acks_.count(id) > 0) {
                     callback = acks_[id];
                     acks_.erase(id);
                 }
@@ -308,6 +327,12 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
             break;
         }
         }
+    }
+    catch (nlohmann::json::parse_error& e) {
+        std::cerr << "Could not parse message from server as JSON: " << e.what() << std::endl;
+    }
+    catch (nlohmann::json::exception& e) {
+        std::cerr << "Error accessing data in json: " << e.what() << std::endl;
     }
     catch(std::exception& err) {
         // TODO: Discuss error handling here
@@ -345,7 +370,7 @@ void teckos::client::send(const std::string& event, const nlohmann::json& args, 
     {
         // Record the callback for later use when the answer comes
         std::lock_guard<std::mutex> lock(ack_mutex_);
-        acks_.insert({ fn_id_, callback });
+        acks_.insert({fn_id_, callback});
     }
     return sendPackage({PacketType::EVENT, {event, args}, fn_id_++});
 }
@@ -357,7 +382,7 @@ void teckos::client::send(const std::string& event, const nlohmann::json& args, 
 
 void teckos::client::sendPackage(teckos::packet packet)
 {
-    nlohmann::json json_msg = {{"type", packet.type}, {"data", packet.data}};
+    nlohmann::json json_msg = {{"type", static_cast<int>(packet.type)}, {"data", packet.data}};
     if(packet.number.has_value()) {
         json_msg["id"] = packet.number.value();
     }
@@ -375,10 +400,9 @@ void teckos::client::sendPackage(teckos::packet packet)
             std::lock_guard<std::mutex> lock(mutex_);
             websocket = websocket_;
         }
-        if (websocket) {
+        if(websocket) {
             websocket->send(msg).get();
-        }
-        else {
+        } else {
             assert(false);
             std::cerr << "Warning: could not send message, websocket pointer is null" << std::endl;
         }
