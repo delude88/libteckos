@@ -18,9 +18,9 @@ private:
     std::string reason_;
 };
 
-teckos::client::client(bool use_async_events) noexcept
+teckos::client::client() 
     : was_connected_before_(false), reconnecting_(false), connected_(false),
-      authenticated_(false), use_async_events_(use_async_events)
+      authenticated_(false)
 {
   teckos::global::init();
 #ifdef USE_IX_WEBSOCKET
@@ -40,13 +40,7 @@ teckos::client::client(bool use_async_events) noexcept
       authenticated_ = false;
       auto abnormal_exit = msg->closeInfo.code != 1000;
       if (disconnected_handler_) {
-        if (use_async_events_) {
-          event_handler_thread_pool_.emplace_back([this, abnormal_exit]() {
-            disconnected_handler_(abnormal_exit);
-          });
-        } else {
-          disconnected_handler_(abnormal_exit);
-        }
+        disconnected_handler_(abnormal_exit);
       }
       break;
     }
@@ -62,19 +56,11 @@ teckos::client::client(bool use_async_events) noexcept
         // Without jwt we are connected now
         if(reconnecting_) {
           if(reconnected_handler_) {
-            if(use_async_events_) {
-              event_handler_thread_pool_.emplace_back([this]() { reconnected_handler_(); });
-            } else {
-              reconnected_handler_();
-            }
+            reconnected_handler_();
           }
         } else {
           if(connected_handler_) {
-            if(use_async_events_) {
-              event_handler_thread_pool_.emplace_back([this]() { connected_handler_(); });
-            } else {
-              connected_handler_();
-            }
+             connected_handler_();
           }
         }
       }
@@ -97,11 +83,6 @@ teckos::client::client(bool use_async_events) noexcept
 
 teckos::client::~client()
 {
-  for(auto& item : event_handler_thread_pool_) {
-    if(item.joinable()) {
-      item.join();
-    }
-  }
   disconnect();
 }
 
@@ -195,11 +176,7 @@ void teckos::client::connect()
       } else {
         // Graceful disconnect, inform handler (if any)
         if(disconnected_handler_) {
-          if(use_async_events_) {
-            event_handler_thread_pool_.emplace_back([this]() { disconnected_handler_(true); });
-          } else {
-            disconnected_handler_(true);
-          }
+          disconnected_handler_(true);
         }
       }
       });
@@ -208,11 +185,7 @@ void teckos::client::connect()
     connected_ = true;
     was_connected_before_ = true;
     if(connected_handler_) {
-      if(use_async_events_) {
-        event_handler_thread_pool_.emplace_back([this]() { connected_handler_(); });
-      } else {
-        connected_handler_();
-      }
+      connected_handler_();
     }
     if(info_.hasJwt) {
       nlohmann::json payload = info_.payload;
@@ -268,45 +241,25 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
           authenticated_ = true;
           if(reconnecting_) {
             if(reconnected_handler_) {
-              if(use_async_events_) {
-                event_handler_thread_pool_.emplace_back([this]() { reconnected_handler_(); });
-              } else {
-                reconnected_handler_();
-              }
+              reconnected_handler_();
             }
           } else {
             if(connected_handler_) {
-              if(use_async_events_) {
-                event_handler_thread_pool_.emplace_back([this]() { connected_handler_(); });
-              } else {
-                connected_handler_();
-              }
+              connected_handler_();
             }
           }
           break;
         }
         // Inform message handler
         if(msg_handler_) {
-          // Spawn a thread handling the assigned callbacks
-          if(use_async_events_) {
-            event_handler_thread_pool_.emplace_back(
-                [this, data]() { msg_handler_(std::move(data)); });
-          } else {
-            msg_handler_(data);
-          }
+          msg_handler_(data);
         }
         // Inform event handler
         if(event_handlers_.count(event) > 0) {
           nlohmann::json payload;
           if(data.size() > 1)
             payload = data[1];
-          if(use_async_events_) {
-            event_handler_thread_pool_.emplace_back(
-                [this, &event, &payload]() {
-              event_handlers_[event](payload); });
-          } else {
-            event_handlers_[event](payload);
-          }
+          event_handlers_[event](payload);
         }
       }
       break;
@@ -501,13 +454,7 @@ void teckos::client::startReconnecting()
       }
       catch (...) {
           if (disconnected_handler_) {
-              if (use_async_events_) {
-                  event_handler_thread_pool_.emplace_back(
-                      [this]() { disconnected_handler_(false); });
-              }
-              else {
-                disconnected_handler_(false);
-              }
+            disconnected_handler_(false);
           }
       }
 
@@ -517,13 +464,7 @@ void teckos::client::startReconnecting()
     if(!connected_ && reconnecting_ && reconnect_tries >= 10) {
       // Reconnect tries exhausted, inform client
       if (disconnected_handler_) {
-        if (use_async_events_) {
-          event_handler_thread_pool_.emplace_back(
-              [this]() { disconnected_handler_(false); });
-        }
-        else {
-          disconnected_handler_(false);
-        }
+        disconnected_handler_(false);
       }
     }
     reconnecting_ = false;

@@ -54,7 +54,7 @@ using Callback = std::function<void(Result)>;
 
 class client {
  public:
-  explicit client(bool use_async_events = false) noexcept;
+  client();
   ~client();
 
   void setReconnect(bool reconnect) noexcept;
@@ -157,10 +157,8 @@ class client {
   std::atomic<bool> reconnecting_;
   bool was_connected_before_;
   bool authenticated_;
-  bool use_async_events_;
   connection_settings settings_;
   connection_info info_;
-  std::vector<std::thread> event_handler_thread_pool_;
 
 #ifndef USE_IX_WEBSOCKET
   std::thread reconnection_thread_;
