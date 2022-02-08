@@ -6,6 +6,8 @@
 #include <nlohmann/json.hpp> // for json_ref
 #include <utility>           // for move
 
+#include "spdlog/spdlog.h" // Better logging
+
 class ConnectionException : public std::exception {
   public:
     ConnectionException(int code, std::string const& reason) : code_(code), reason_(reason) {}
@@ -158,14 +160,9 @@ void teckos::client::connect()
             auto msg = ret_msg.extract_string().get();
             handleMessage(msg);
         }
-        catch(std::exception& err) {
-            // TODO: Discuss error handling here
-            std::cerr << "Invalid message from server: " << err.what() << std::endl;
-        }
         catch(...) {
-            std::cerr << "Unhandled exception occurred when parsing incoming "
-                         "message or calling handleMessage"
-                      << std::endl;
+            spdlog::error("Unhandled exception occurred when parsing incoming "
+                "message or calling handleMessage:");
         }
     });
     websocket->set_close_handler([this](web::websockets::client::websocket_close_status close_status,
@@ -246,7 +243,7 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
         return;
     }
 #ifdef DEBUG_TECKOS_RECV
-    std::cout << "teckos:receive << " << msg << std::endl;
+    spdlog::debug("teckos:receive << {}", msg);
 #endif
     try {
         auto j = nlohmann::json::parse(msg);
@@ -323,20 +320,20 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
             break;
         }
         default: {
-            std::cerr << "Warning: unknown packet type received: " << std::endl;
+            spdlog::warn("Unknown packet type received: {}", type);
             break;
         }
         }
     }
     catch (nlohmann::json::parse_error& e) {
-        std::cerr << "Could not parse message from server as JSON: " << e.what() << std::endl;
+        spdlog::error("Could not parse message from server as JSON: {}", e.what());
     }
     catch (nlohmann::json::exception& e) {
-        std::cerr << "Error accessing data in json: " << e.what() << std::endl;
+        spdlog::error("Error accessing data in json: {}", e.what());
     }
     catch(std::exception& err) {
         // TODO: Discuss error handling here
-        std::cerr << "Could not parse message from server as JSON: " << err.what() << std::endl;
+        spdlog::error("Could not parse message from server as JSON: {}",  err.what());
     }
 }
 
@@ -387,7 +384,7 @@ void teckos::client::sendPackage(teckos::packet packet)
         json_msg["id"] = packet.number.value();
     }
 #ifdef DEBUG_TECKOS_SEND
-    std::cout << "teckos:send >> " << json_msg.dump() << std::endl;
+    spdlog::debug("teckos:send >> {}", json_msg.dump());
 #endif
 #ifdef USE_IX_WEBSOCKET
     ws_->send(json_msg.dump());
@@ -404,13 +401,13 @@ void teckos::client::sendPackage(teckos::packet packet)
             websocket->send(msg).get();
         } else {
             assert(false);
-            std::cerr << "Warning: could not send message, websocket pointer is null" << std::endl;
+            spdlog::error("Could not send message, websocket pointer is null");
         }
     }
     catch(std::exception& err) {
         // Usually an exception is thrown here, when the connection has been
         // disconnected in the meantime (since sendXY has been called)
-        std::cerr << "Warning: could not send message, reason: " << err.what() << std::endl;
+        spdlog::warn("Could not send message, reason: {}", err.what());
     }
 #endif
 }
@@ -477,15 +474,16 @@ void teckos::client::startReconnecting()
         int reconnect_tries = 0;
         while(!connected_ && reconnecting_ && reconnect_tries < 10) {
             try {
-                std::cout << "Reconnect (" << reconnect_tries << "/" << 10 << ")" << std::endl;
+                spdlog::debug("Reconnect ({}/{})", reconnect_tries, 10);
                 connect();
             }
             catch(ConnectionException& e) {
-                std::cout << "Connection closed by [" << e.code() << "]: " << e.reason() << std::endl;
+                spdlog::warn("Connection closed during reconnect [code {}]: {}", e.code(), e.reason());
                 connected_ = false;
                 authenticated_ = false;
             }
             catch(...) {
+                spdlog::error("Caught unknown exception in startReconnecting(), unhandled error!");
                 auto disconnected_handler = lockedMemberCopy(disconnected_handler_);
                 if(disconnected_handler) {
                     disconnected_handler(false);

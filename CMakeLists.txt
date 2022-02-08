@@ -58,6 +58,7 @@ else ()
     find_package(OpenSSL REQUIRED)
 endif ()
 find_package(nlohmann_json 3.2.0 REQUIRED)
+find_package(spdlog REQUIRED)
 
 
 #################################################
@@ -95,10 +96,10 @@ endif ()
 
 target_link_libraries(${PROJECT_NAME}
         PUBLIC
-        nlohmann_json::nlohmann_json)
+        nlohmann_json::nlohmann_json spdlog::spdlog)
 target_link_libraries(${PROJECT_NAME}Static
         PUBLIC
-        nlohmann_json::nlohmann_json)
+        nlohmann_json::nlohmann_json spdlog::spdlog)
 
 if (USE_IX_WEBSOCKET)
     target_compile_definitions(${PROJECT_NAME}
