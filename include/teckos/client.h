@@ -57,17 +57,14 @@ class client {
   client();
   ~client();
 
-  void setReconnect(bool reconnect) noexcept;
-
+  void setShouldReconnect(bool reconnect) noexcept;
   [[nodiscard]] bool shouldReconnect() const noexcept;
 
-  void sendPayloadOnReconnect(bool sendPayloadOnReconnect) noexcept;
-
+  void setSendPayloadOnReconnect(bool sendPayloadOnReconnect) noexcept;
   [[nodiscard]] bool isSendingPayloadOnReconnect() const noexcept;
 
-  void setTimeout(std::chrono::milliseconds milliseconds) noexcept;
-
-  std::chrono::milliseconds getTimeout() const noexcept;
+  void setReconnectTrySleep(std::chrono::milliseconds milliseconds) noexcept;
+  [[nodiscard]] std::chrono::milliseconds reconnectTrySleep() const noexcept;
 
   void on(const std::string &event,
           const std::function<void(const nlohmann::json &)> &handler);

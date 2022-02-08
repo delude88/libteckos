@@ -364,13 +364,13 @@ void teckos::client::sendPackage(teckos::packet packet)
 #endif
 }
 
-void teckos::client::setTimeout(std::chrono::milliseconds milliseconds) noexcept
+void teckos::client::setReconnectTrySleep(std::chrono::milliseconds milliseconds) noexcept
 {
   timeout_ = milliseconds;
 }
 
 [[maybe_unused]] std::chrono::milliseconds
-teckos::client::getTimeout() const noexcept
+teckos::client::reconnectTrySleep() const noexcept
 {
   return timeout_;
 }
@@ -380,7 +380,7 @@ bool teckos::client::isConnected() const noexcept
   return connected_ && authenticated_;
 }
 
-void teckos::client::setReconnect(bool shallReconnect) noexcept
+void teckos::client::setShouldReconnect(bool shallReconnect) noexcept
 {
   settings_.reconnect = shallReconnect;
 }
@@ -390,7 +390,7 @@ bool teckos::client::shouldReconnect() const noexcept
   return settings_.reconnect;
 }
 
-void teckos::client::sendPayloadOnReconnect(
+void teckos::client::setSendPayloadOnReconnect(
     bool sendPayloadOnReconnect) noexcept
 {
   settings_.sendPayloadOnReconnect = sendPayloadOnReconnect;
