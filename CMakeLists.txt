@@ -65,8 +65,14 @@ find_package(nlohmann_json 3.2.0 REQUIRED)
 #   Library artifact
 #
 #################################################
-add_library(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/teckos/client.cc ${PROJECT_SOURCE_DIR}/src/teckos/rest.cc)
-add_library(${PROJECT_NAME}Static STATIC ${PROJECT_SOURCE_DIR}/src/teckos/client.cc ${PROJECT_SOURCE_DIR}/src/teckos/rest.cc)
+set(SOURCES 
+    include/teckos/global.h
+    src/teckos/client.cc include/teckos/client.h
+    src/teckos/rest.cc include/teckos/rest.h)
+
+
+add_library(${PROJECT_NAME} ${SOURCES} )
+add_library(${PROJECT_NAME}Static STATIC ${SOURCES})
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 add_library(${PROJECT_NAME}::${PROJECT_NAME}Static ALIAS ${PROJECT_NAME}Static)
 target_include_directories(${PROJECT_NAME} PUBLIC
