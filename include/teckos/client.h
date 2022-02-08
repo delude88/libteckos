@@ -171,7 +171,11 @@ namespace teckos {
         std::map<int, Callback> acks_;
         std::mutex ack_mutex_;
 
+#ifdef USE_IX_WEBSOCKET
+        std::shared_ptr<WebSocketClient> ws_;
+#else
         std::shared_ptr<WebSocketClient> websocket_;
+#endif
         std::mutex mutex_; // Guard access to the WebSocketClient pointer, which might be reinitialized at any time
 
         std::atomic<bool> connected_;
