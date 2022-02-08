@@ -135,11 +135,23 @@ namespace teckos {
       private:
         std::atomic<std::chrono::milliseconds> timeout_;
 
-        std::atomic<std::function<void()>> connected_handler_;
+        template <class T> 
+        T lockedMemberCopy(T const& toCopy) {
+            T copyToReturn;
+            {
+                std::lock_guard<std::mutex> lock(event_handler_mutex_);
+                copyToReturn = toCopy;
+            }
+            return copyToReturn;
+        }
+
+        std::function<void()> connected_handler_;
         std::function<void()> reconnected_handler_;
         std::function<void(bool)> disconnected_handler_;
         std::function<void(const std::vector<nlohmann::json>&)> msg_handler_;
         std::map<std::string, std::function<void(const nlohmann::json&)>> event_handlers_;
+        std::mutex event_handler_mutex_; // This locks access to any of the above
+
         std::recursive_mutex mutex_;
         uint32_t fn_id_ = 0;
         std::map<uint32_t, Callback> acks_;

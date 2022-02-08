@@ -39,8 +39,9 @@ teckos::client::client()
             connected_ = false;
             authenticated_ = false;
             auto abnormal_exit = msg->closeInfo.code != 1000;
-            if(disconnected_handler_) {
-                disconnected_handler_(abnormal_exit);
+            auto disconnected_handler = lockedMemberCopy(disconnected_handler_);
+            if(disconnected_handler) {
+                disconnected_handler(abnormal_exit);
             }
             break;
         }
@@ -55,11 +56,12 @@ teckos::client::client()
                 authenticated_ = true;
                 // Without jwt we are connected now
                 if(reconnecting_) {
-                    if(reconnected_handler_) {
-                        reconnected_handler_();
+                    auto reconnected_handler = lockedMemberCopy(reconnected_handler_);
+                    if(reconnected_handler) {
+                        reconnected_handler();
                     }
                 } else {
-                    auto connected_handler = connected_handler_.load();
+                    auto connected_handler = lockedMemberCopy(connected_handler_);
                     if(connected_handler) {
                         connected_handler();
                     }
@@ -89,12 +91,14 @@ teckos::client::~client()
 
 void teckos::client::on(const std::string& event, const std::function<void(const nlohmann::json&)>& handler)
 {
+    std::lock_guard<std::mutex> lock(event_handler_mutex_);
     // TODO: Support multiple handlers for a single event
     event_handlers_[event] = handler;
 }
 
 void teckos::client::off(const std::string& event)
 {
+    std::lock_guard<std::mutex> lock(event_handler_mutex_);
     event_handlers_.erase(event);
 }
 
@@ -168,8 +172,9 @@ void teckos::client::connect()
             }
         } else {
             // Graceful disconnect, inform handler (if any)
-            if(disconnected_handler_) {
-                disconnected_handler_(true);
+            auto disconnected_handler = lockedMemberCopy(disconnected_handler_);
+            if(disconnected_handler) {
+                disconnected_handler(true);
             }
         }
     });
@@ -177,7 +182,7 @@ void teckos::client::connect()
         ws_->connect(utility::conversions::to_string_t(info_.url)).wait();
         connected_ = true;
         was_connected_before_ = true;
-        auto connected_handler = connected_handler_.load();
+        auto connected_handler = lockedMemberCopy(connected_handler_);
         if(connected_handler) {
             connected_handler();
         }
@@ -234,11 +239,12 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
                     // token valid
                     authenticated_ = true;
                     if(reconnecting_) {
-                        if(reconnected_handler_) {
-                            reconnected_handler_();
+                        auto reconnected_handler = lockedMemberCopy(reconnected_handler_);
+                        if(reconnected_handler) {
+                            reconnected_handler();
                         }
                     } else {
-                        auto connected_handler = connected_handler_.load();
+                        auto connected_handler = lockedMemberCopy(connected_handler_);
                         if(connected_handler) {
                             connected_handler();
                         }
@@ -246,15 +252,28 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
                     break;
                 }
                 // Inform message handler
-                if(msg_handler_) {
-                    msg_handler_(data);
+                std::function<void(const std::vector<nlohmann::json>&)> msg_handler;
+                {
+                    std::lock_guard<std::mutex> lock(event_handler_mutex_);
+                    msg_handler = msg_handler_;
                 }
-                // Inform event handler
-                if(event_handlers_.count(event) > 0) {
+                if(msg_handler) {
+                    msg_handler(data);
+                }
+                // Inform event handler, if any is registered
+                std::function<void(const nlohmann::json&)> event_handler;
+                {
+                    std::lock_guard<std::mutex> lock(event_handler_mutex_);
+                    if (event_handlers_.count(event) > 0) {
+                        event_handler = event_handlers_[event];
+                    }
+                }
+                if(event_handler) {
                     nlohmann::json payload;
-                    if(data.size() > 1)
+                    if (data.size() > 1) {
                         payload = data[1];
-                    event_handlers_[event](payload);
+                    }
+                    event_handler(payload);
                 }
             }
             break;
@@ -283,13 +302,8 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
 
 void teckos::client::setMessageHandler(const std::function<void(const std::vector<nlohmann::json>&)>& handler) noexcept
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if(handler) {
-        auto func = [handler](const std::vector<nlohmann::json>& json) { handler(json); };
-        msg_handler_ = func;
-    } else {
-        msg_handler_ = nullptr;
-    }
+    std::lock_guard<std::mutex> lock(event_handler_mutex_);
+    msg_handler_ = handler;
 }
 
 void teckos::client::send(const std::string& event)
@@ -389,29 +403,20 @@ void teckos::client::setSendPayloadOnReconnect(bool sendPayloadOnReconnect) noex
 
 void teckos::client::on_connected(const std::function<void()>& handler) noexcept
 {
+    std::lock_guard<std::mutex> lock(event_handler_mutex_);
     connected_handler_ = handler;
 }
 
 void teckos::client::on_reconnected(const std::function<void()>& handler) noexcept
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if(handler) {
-        auto func = [handler]() { handler(); };
-        reconnected_handler_ = func;
-    } else {
-        reconnected_handler_ = nullptr;
-    }
+    std::lock_guard<std::mutex> lock(event_handler_mutex_);
+    reconnected_handler_ = handler;
 }
 
 void teckos::client::on_disconnected(const std::function<void(bool)>& handler) noexcept
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if(handler) {
-        auto func = [handler](bool result) { handler(result); };
-        disconnected_handler_ = func;
-    } else {
-        disconnected_handler_ = nullptr;
-    }
+    std::lock_guard<std::mutex> lock(event_handler_mutex_);
+    disconnected_handler_ = handler;
 }
 
 #ifndef USE_IX_WEBSOCKET
@@ -432,8 +437,9 @@ void teckos::client::startReconnecting()
                 authenticated_ = false;
             }
             catch(...) {
-                if(disconnected_handler_) {
-                    disconnected_handler_(false);
+                auto disconnected_handler = lockedMemberCopy(disconnected_handler_);
+                if(disconnected_handler) {
+                    disconnected_handler(false);
                 }
             }
 
@@ -442,8 +448,9 @@ void teckos::client::startReconnecting()
         }
         if(!connected_ && reconnecting_ && reconnect_tries >= 10) {
             // Reconnect tries exhausted, inform client
-            if(disconnected_handler_) {
-                disconnected_handler_(false);
+            auto disconnected_handler = lockedMemberCopy(disconnected_handler_);
+            if(disconnected_handler) {
+                disconnected_handler(false);
             }
         }
         reconnecting_ = false;
