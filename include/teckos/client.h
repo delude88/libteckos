@@ -135,7 +135,7 @@ namespace teckos {
       private:
         std::atomic<std::chrono::milliseconds> timeout_;
 
-        std::function<void()> connected_handler_;
+        std::atomic<std::function<void()>> connected_handler_;
         std::function<void()> reconnected_handler_;
         std::function<void(bool)> disconnected_handler_;
         std::function<void(const std::vector<nlohmann::json>&)> msg_handler_;

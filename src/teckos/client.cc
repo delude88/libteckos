@@ -59,8 +59,9 @@ teckos::client::client()
                         reconnected_handler_();
                     }
                 } else {
-                    if(connected_handler_) {
-                        connected_handler_();
+                    auto connected_handler = connected_handler_.load();
+                    if(connected_handler) {
+                        connected_handler();
                     }
                 }
             }
@@ -176,8 +177,9 @@ void teckos::client::connect()
         ws_->connect(utility::conversions::to_string_t(info_.url)).wait();
         connected_ = true;
         was_connected_before_ = true;
-        if(connected_handler_) {
-            connected_handler_();
+        auto connected_handler = connected_handler_.load();
+        if(connected_handler) {
+            connected_handler();
         }
         if(info_.hasJwt) {
             nlohmann::json payload = info_.payload;
@@ -236,8 +238,9 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
                             reconnected_handler_();
                         }
                     } else {
-                        if(connected_handler_) {
-                            connected_handler_();
+                        auto connected_handler = connected_handler_.load();
+                        if(connected_handler) {
+                            connected_handler();
                         }
                     }
                     break;
@@ -386,7 +389,6 @@ void teckos::client::setSendPayloadOnReconnect(bool sendPayloadOnReconnect) noex
 
 void teckos::client::on_connected(const std::function<void()>& handler) noexcept
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
     connected_handler_ = handler;
 }
 
