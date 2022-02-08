@@ -93,6 +93,7 @@ void teckos::client::on(const std::string& event, const std::function<void(const
 {
     std::lock_guard<std::mutex> lock(event_handler_mutex_);
     // TODO: Support multiple handlers for a single event
+    assert(event_handlers_.find(event) == event_handlers_.end());
     event_handlers_[event] = handler;
 }
 
