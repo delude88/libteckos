@@ -39,8 +39,8 @@ struct packet {
   std::optional<uint32_t> number;
 };
 struct connection_settings {
-  bool reconnect = false;
-  bool sendPayloadOnReconnect = false;
+  std::atomic<bool> reconnect = false;
+  std::atomic<bool> sendPayloadOnReconnect = false;
 };
 struct connection_info {
   std::string url;

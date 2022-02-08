@@ -383,7 +383,6 @@ bool teckos::client::isConnected() const noexcept
 
 void teckos::client::setReconnect(bool shallReconnect) noexcept
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
   settings_.reconnect = shallReconnect;
 }
 
@@ -395,7 +394,6 @@ bool teckos::client::shouldReconnect() const noexcept
 void teckos::client::sendPayloadOnReconnect(
     bool sendPayloadOnReconnect) noexcept
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
   settings_.sendPayloadOnReconnect = sendPayloadOnReconnect;
 }
 
