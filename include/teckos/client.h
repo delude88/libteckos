@@ -49,6 +49,16 @@ namespace teckos {
         nlohmann::json payload;
     };
 
+    class invalid_message_parameter_exception : public std::runtime_error {
+    public:
+       invalid_message_parameter_exception(const std::string& what) : std::runtime_error(what) {}
+    };
+
+    class not_connected_exception: public std::runtime_error {
+      public:
+          not_connected_exception() : std::runtime_error("logically not connected, can't send") {}
+    };
+
     using Result = const std::vector<nlohmann::json>&;
     using Callback = std::function<void(Result)>;
 
@@ -152,14 +162,17 @@ namespace teckos {
         std::map<std::string, std::function<void(const nlohmann::json&)>> event_handlers_;
         std::mutex event_handler_mutex_; // This locks access to any of the above
 
-        std::recursive_mutex mutex_;
         uint32_t fn_id_ = 0;
         std::map<uint32_t, Callback> acks_;
-        std::unique_ptr<WebSocketClient> ws_;
+        std::mutex ack_mutex_;
+
+        std::shared_ptr<WebSocketClient> websocket_;
+        std::mutex mutex_; // Guard access to the WebSocketClient pointer, which might be reinitialized at any time
+
         std::atomic<bool> connected_;
         std::atomic<bool> reconnecting_;
-        bool was_connected_before_;
-        bool authenticated_;
+        std::atomic<bool> was_connected_before_;
+        std::atomic<bool> authenticated_;
         connection_settings settings_;
         connection_info info_;
 

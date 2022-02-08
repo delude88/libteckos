@@ -105,7 +105,6 @@ void teckos::client::on(const std::string& event, const std::function<void(const
 
 void teckos::client::connect(const std::string& url) noexcept(false)
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
     info_ = {url, false, "", ""};
     if(connected_) {
         disconnect();
@@ -117,7 +116,6 @@ void teckos::client::connect(const std::string& url) noexcept(false)
 void teckos::client::connect(const std::string& url, const std::string& jwt,
                              const nlohmann::json& initialPayload) noexcept(false)
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
     info_ = {url, true, jwt, initialPayload};
     if(connected_) {
         disconnect();
@@ -147,8 +145,14 @@ void teckos::client::connect()
     // Connect
     connected_ = false;
     authenticated_ = false;
-    ws_ = std::make_unique<WebSocketClient>();
-    ws_->set_message_handler([this](const web::websockets::client::websocket_incoming_message& ret_msg) {
+    std::shared_ptr<WebSocketClient> websocket;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        assert(!websocket_); // You are replacing an existing websocket, is that what you intended? Sure no callbacks are running?
+        websocket_ = std::make_shared<WebSocketClient>();
+        websocket = websocket_;
+    }
+    websocket->set_message_handler([this](const web::websockets::client::websocket_incoming_message& ret_msg) {
         try {
             auto msg = ret_msg.extract_string().get();
             handleMessage(msg);
@@ -163,7 +167,7 @@ void teckos::client::connect()
                       << std::endl;
         }
     });
-    ws_->set_close_handler([this](web::websockets::client::websocket_close_status close_status,
+    websocket->set_close_handler([this](web::websockets::client::websocket_close_status close_status,
                                   const utility::string_t& reason, const std::error_code& code) {
         connected_ = false;
         if(close_status == web::websockets::client::websocket_close_status::abnormal_close) {
@@ -180,7 +184,7 @@ void teckos::client::connect()
         }
     });
     try {
-        ws_->connect(utility::conversions::to_string_t(info_.url)).wait();
+        websocket_->connect(utility::conversions::to_string_t(info_.url)).wait();
         connected_ = true;
         was_connected_before_ = true;
         auto connected_handler = lockedMemberCopy(connected_handler_);
@@ -202,7 +206,6 @@ void teckos::client::connect()
 
 void teckos::client::disconnect()
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
 #ifndef USE_IX_WEBSOCKET
     stopReconnecting();
 #endif
@@ -211,8 +214,12 @@ void teckos::client::disconnect()
         ws_->stop(1000, "Normal Closure");
 #else
         // Now close connecting, if it is still there
-        if(ws_) {
-            ws_->close(web::websockets::client::websocket_close_status::normal).wait();
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+        }
+        assert(websocket_); // If this asserts you are doing disconnect too late
+        if(websocket_) {
+            websocket_->close(web::websockets::client::websocket_close_status::normal).wait();
         }
 #endif
     }
@@ -283,9 +290,16 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
             // type === PacketType::ACK
             // We have to call the function
             const int32_t id = j["id"];
-            if(acks_.count(id) > 0) {
-                acks_[id](j["data"].get<std::vector<nlohmann::json>>());
-                acks_.erase(id);
+            Callback callback;
+            {
+                std::lock_guard<std::mutex> lock(ack_mutex_);
+                if (acks_.count(id) > 0) {
+                    callback = acks_[id];
+                    acks_.erase(id);
+                }
+            }
+            if(callback) {
+                callback(j["data"].get<std::vector<nlohmann::json>>());
             }
             break;
         }
@@ -309,44 +323,43 @@ void teckos::client::setMessageHandler(const std::function<void(const std::vecto
 
 void teckos::client::send(const std::string& event)
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if(!connected_ && !authenticated_ && event != "token") {
-        throw std::runtime_error("Not connected");
+    if(!isConnected() && event != "token") {
+        throw not_connected_exception();
     }
     return sendPackage({PacketType::EVENT, {event, {}}, std::nullopt});
 }
 
 void teckos::client::send(const std::string& event, const nlohmann::json& args)
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if(!connected_ && !authenticated_ && event != "token") {
-        throw std::runtime_error("Not connected");
+    if(!isConnected() && event != "token") {
+        throw not_connected_exception();
     }
     return sendPackage({PacketType::EVENT, {event, args}, std::nullopt});
 }
 
 void teckos::client::send(const std::string& event, const nlohmann::json& args, Callback callback)
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if(!connected_ && !authenticated_ && event != "token") {
-        throw std::runtime_error("Not connected");
+    if(!isConnected() && event != "token") {
+        throw not_connected_exception();
     }
-    acks_.insert({fn_id_, std::move(callback)});
+    {
+        // Record the callback for later use when the answer comes
+        std::lock_guard<std::mutex> lock(ack_mutex_);
+        acks_.insert({ fn_id_, callback });
+    }
     return sendPackage({PacketType::EVENT, {event, args}, fn_id_++});
 }
 
 [[maybe_unused]] void teckos::client::send_json(const nlohmann::json& args)
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
     return sendPackage({PacketType::EVENT, args, std::nullopt});
 }
 
 void teckos::client::sendPackage(teckos::packet packet)
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
     nlohmann::json json_msg = {{"type", packet.type}, {"data", packet.data}};
-    if(packet.number) {
-        json_msg["id"] = *packet.number;
+    if(packet.number.has_value()) {
+        json_msg["id"] = packet.number.value();
     }
 #ifdef DEBUG_TECKOS_SEND
     std::cout << "teckos:send >> " << json_msg.dump() << std::endl;
@@ -357,7 +370,18 @@ void teckos::client::sendPackage(teckos::packet packet)
     web::websockets::client::websocket_outgoing_message msg;
     msg.set_utf8_message(json_msg.dump());
     try {
-        ws_->send(msg).get();
+        std::shared_ptr<WebSocketClient> websocket;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            websocket = websocket_;
+        }
+        if (websocket) {
+            websocket->send(msg).get();
+        }
+        else {
+            assert(false);
+            std::cerr << "Warning: could not send message, websocket pointer is null" << std::endl;
+        }
     }
     catch(std::exception& err) {
         // Usually an exception is thrown here, when the connection has been
