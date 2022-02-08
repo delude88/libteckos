@@ -381,7 +381,7 @@ void teckos::client::sendPackage(teckos::packet packet)
 {
     nlohmann::json json_msg = {{"type", static_cast<int>(packet.type)}, {"data", packet.data}};
     if(packet.number.has_value()) {
-        json_msg["id"] = packet.number.value();
+        json_msg["id"] = *packet.number;
     }
 #ifdef DEBUG_TECKOS_SEND
     spdlog::debug("teckos:send >> {}", json_msg.dump());
