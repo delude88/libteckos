@@ -77,7 +77,7 @@ namespace teckos {
          */
         void on_disconnected(const std::function<void(bool)>& handler) noexcept;
 
-        void off(const std::string& event);
+        //void off(const std::string& event);
 
         /**
          * Connect to the given url.

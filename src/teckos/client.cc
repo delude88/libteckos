@@ -96,11 +96,11 @@ void teckos::client::on(const std::string& event, const std::function<void(const
     event_handlers_[event] = handler;
 }
 
-void teckos::client::off(const std::string& event)
+/*void teckos::client::off(const std::string& event)
 {
     std::lock_guard<std::mutex> lock(event_handler_mutex_);
     event_handlers_.erase(event);
-}
+}*/
 
 void teckos::client::connect(const std::string& url) noexcept(false)
 {
