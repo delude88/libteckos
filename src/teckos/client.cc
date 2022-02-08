@@ -20,7 +20,7 @@ private:
 
 teckos::client::client() 
     : was_connected_before_(false), reconnecting_(false), connected_(false),
-      authenticated_(false)
+      authenticated_(false), timeout_(500)
 {
   teckos::global::init();
 #ifdef USE_IX_WEBSOCKET
