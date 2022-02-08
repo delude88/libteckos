@@ -20,7 +20,7 @@ private:
 
 teckos::client::client() 
     : was_connected_before_(false), reconnecting_(false), connected_(false),
-      authenticated_(false), timeout_(500)
+      authenticated_(false), timeout_(std::chrono::milliseconds(500))
 {
   teckos::global::init();
 #ifdef USE_IX_WEBSOCKET
@@ -366,7 +366,6 @@ void teckos::client::sendPackage(teckos::packet packet)
 
 void teckos::client::setTimeout(std::chrono::milliseconds milliseconds) noexcept
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
   timeout_ = milliseconds;
 }
 
@@ -457,7 +456,7 @@ void teckos::client::startReconnecting()
       }
 
       reconnect_tries++;
-      std::this_thread::sleep_for(timeout_);
+      std::this_thread::sleep_for(timeout_.load());
     }
     if(!connected_ && reconnecting_ && reconnect_tries >= 10) {
       // Reconnect tries exhausted, inform client

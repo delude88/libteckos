@@ -141,7 +141,7 @@ class client {
   void sendPackage(packet packet) noexcept(false);
 
  private:
-  std::chrono::milliseconds timeout_;
+  std::atomic<std::chrono::milliseconds> timeout_;
 
   std::function<void()> connected_handler_;
   std::function<void()> reconnected_handler_;
