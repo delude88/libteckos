@@ -2,6 +2,8 @@
 #include <utility>                               // for pair, make_pair
 #include "teckos/global.h"                       // for global
 
+#include "spdlog/spdlog.h"
+
 #ifdef USE_IX_WEBSOCKET
 #include <ixwebsocket/IXHttpClient.h>
 #include <ixwebsocket/IXHttp.h>                  // for HttpRequestArgs
@@ -62,45 +64,59 @@ teckos::RestResult teckos::rest::Post(const std::string &url, const Header heade
 
 teckos::RestResult teckos::rest::Get(const std::string &url, const Header header) {
   teckos::global::init();
-  web::http::client::http_client client(utility::conversions::to_string_t(url));
-  web::http::http_request request(web::http::methods::GET);
-  for (const auto &item: header) {
-    request.headers().add(utility::conversions::to_string_t(item.first),
-                          utility::conversions::to_string_t(item.second));
+  try {
+      web::http::client::http_client client(utility::conversions::to_string_t(url));
+      web::http::http_request request(web::http::methods::GET);
+      for (const auto& item : header) {
+          request.headers().add(utility::conversions::to_string_t(item.first),
+              utility::conversions::to_string_t(item.second));
+      }
+      auto response = client.request(request).get();
+      teckos::RestResult result;
+      result.statusCode = response.status_code();
+      result.statusMessage = utility::conversions::to_utf8string(response.reason_phrase());
+      auto strBody = utility::conversions::to_utf8string(response.extract_string().get());
+      if (nlohmann::json::accept(strBody)) {
+          result.body = nlohmann::json::parse(strBody);
+      }
+      else {
+          result.body = nullptr;
+      }
+      return result;
   }
-  auto response = client.request(request).get();
-  teckos::RestResult result;
-  result.statusCode = response.status_code();
-  result.statusMessage = utility::conversions::to_utf8string(response.reason_phrase());
-  auto strBody = utility::conversions::to_utf8string(response.extract_string().get());
-  if (nlohmann::json::accept(strBody)) {
-    result.body = nlohmann::json::parse(strBody);
-  } else {
-    result.body = nullptr;
+  catch (std::exception &e) {
+      spdlog::error("Caught execption during teckos::rest::Get: {}", e.what());
+      return teckos::RestResult({ 500, e.what(), {} });
   }
-  return result;
 }
 
 teckos::RestResult teckos::rest::Post(const std::string &url, const Header header, const nlohmann::json &body) {
   teckos::global::init();
-  web::http::client::http_client client(utility::conversions::to_string_t(url));
-  web::http::http_request request(web::http::methods::POST);
-  if (!body.is_null()) {
-    request.set_body(body.dump(), "application/json");
+  try {
+      web::http::client::http_client client(utility::conversions::to_string_t(url));
+      web::http::http_request request(web::http::methods::POST);
+      if (!body.is_null()) {
+          request.set_body(body.dump(), "application/json");
+      }
+      for (const auto& item : header) {
+          request.headers().add(utility::conversions::to_string_t(item.first), utility::conversions::to_string_t(item.second));
+      }
+      auto response = client.request(request).get();
+      teckos::RestResult result;
+      result.statusCode = response.status_code();
+      result.statusMessage = utility::conversions::to_utf8string(response.reason_phrase());
+      auto strBody = utility::conversions::to_utf8string(response.extract_string().get());
+      if (nlohmann::json::accept(strBody)) {
+          result.body = nlohmann::json::parse(strBody);
+      }
+      else {
+          result.body = nullptr;
+      }
+      return result;
   }
-  for (const auto &item: header) {
-    request.headers().add(utility::conversions::to_string_t(item.first), utility::conversions::to_string_t(item.second));
+  catch(std::exception& e) {
+      spdlog::error("Caught execption during teckos::rest::Post: {}", e.what());
+      return teckos::RestResult({500, e.what(), {}});
   }
-  auto response = client.request(request).get();
-  teckos::RestResult result;
-  result.statusCode = response.status_code();
-  result.statusMessage = utility::conversions::to_utf8string(response.reason_phrase());
-  auto strBody = utility::conversions::to_utf8string(response.extract_string().get());
-  if (nlohmann::json::accept(strBody)) {
-    result.body = nlohmann::json::parse(strBody);
-  } else {
-    result.body = nullptr;
-  }
-  return result;
 }
 #endif
