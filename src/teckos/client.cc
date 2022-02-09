@@ -348,7 +348,7 @@ void teckos::client::send(const std::string& event)
     if(!isConnected() && event != "token") {
         throw not_connected_exception();
     }
-    return sendPackage({PacketType::EVENT, {event, {}}, std::nullopt});
+    sendPackage({PacketType::EVENT, {event, {}}, std::nullopt});
 }
 
 void teckos::client::send(const std::string& event, const nlohmann::json& args)
@@ -356,7 +356,7 @@ void teckos::client::send(const std::string& event, const nlohmann::json& args)
     if(!isConnected() && event != "token") {
         throw not_connected_exception();
     }
-    return sendPackage({PacketType::EVENT, {event, args}, std::nullopt});
+    sendPackage({PacketType::EVENT, {event, args}, std::nullopt});
 }
 
 void teckos::client::send(const std::string& event, const nlohmann::json& args, Callback callback)
@@ -369,12 +369,12 @@ void teckos::client::send(const std::string& event, const nlohmann::json& args, 
         std::lock_guard<std::mutex> lock(ack_mutex_);
         acks_.insert({fn_id_, callback});
     }
-    return sendPackage({PacketType::EVENT, {event, args}, fn_id_++});
+    sendPackage({PacketType::EVENT, {event, args}, fn_id_++});
 }
 
 [[maybe_unused]] void teckos::client::send_json(const nlohmann::json& args)
 {
-    return sendPackage({PacketType::EVENT, args, std::nullopt});
+    sendPackage({PacketType::EVENT, args, std::nullopt});
 }
 
 void teckos::client::sendPackage(teckos::packet packet)
