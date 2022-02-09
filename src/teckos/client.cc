@@ -150,8 +150,6 @@ void teckos::client::connect()
     std::shared_ptr<WebSocketClient> websocket;
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        assert(!websocket_); // You are replacing an existing websocket, is that what you intended? Sure no callbacks
-                             // are running?
         websocket_ = std::make_shared<WebSocketClient>();
         websocket = websocket_;
     }
