@@ -150,13 +150,13 @@ class client {
   std::map<std::string, std::function<void(const nlohmann::json &)>>
       event_handlers_;
   std::recursive_mutex mutex_;
-  uint32_t fn_id_ = 0;
+  uint32_t fn_id_{0};
   std::map<uint32_t, Callback> acks_;
   std::unique_ptr<WebSocketClient> ws_;
-  std::atomic<bool> connected_;
-  std::atomic<bool> reconnecting_;
-  bool was_connected_before_;
-  bool authenticated_;
+  std::atomic<bool> connected_{false};
+  std::atomic<bool> reconnecting_{false};
+  bool was_connected_before_{false};
+  bool authenticated_{false};
   bool use_async_events_;
   connection_settings settings_;
   connection_info info_;

@@ -19,8 +19,7 @@ private:
 };
 
 teckos::client::client(bool use_async_events) noexcept
-    : was_connected_before_(false), reconnecting_(false), connected_(false),
-      authenticated_(false), use_async_events_(use_async_events)
+: use_async_events_(use_async_events)
 {
   teckos::global::init();
 #ifdef USE_IX_WEBSOCKET
