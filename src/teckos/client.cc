@@ -183,8 +183,8 @@ void teckos::client::connect()
       });
   ws_->set_close_handler(
       [this](web::websockets::client::websocket_close_status close_status,
-             const utility::string_t& reason,
-             const std::error_code& code) {
+             const utility::string_t &,
+             const std::error_code &) {
         connected_ = false;
       if (close_status == web::websockets::client::websocket_close_status::abnormal_close) {
         if(!reconnecting_ && was_connected_before_) {
