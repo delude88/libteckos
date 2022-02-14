@@ -20,8 +20,8 @@ class ConnectionException : public std::exception {
 };
 
 teckos::client::client()
-    : fn_id_(0), was_connected_before_(false), reconnecting_(false), connected_(false), authenticated_(false),
-      timeout_(std::chrono::milliseconds(500))
+    : timeout_(std::chrono::milliseconds(500)), fn_id_(0), connected_(false), reconnecting_(false),
+      was_connected_before_(false), authenticated_(false)
 {
     teckos::global::init();
 #ifdef USE_IX_WEBSOCKET
@@ -159,7 +159,7 @@ void teckos::client::connect()
         }
         catch(...) {
             spdlog::error("Unhandled exception occurred when parsing incoming "
-                "message or calling handleMessage:");
+                          "message or calling handleMessage:");
         }
     });
     websocket->set_close_handler([this](web::websockets::client::websocket_close_status close_status,
@@ -221,14 +221,14 @@ void teckos::client::disconnect()
     connected_ = false;
 }
 
-template <typename T>
-T get_json(nlohmann::json const& json, const nlohmann::json::object_t::key_type& key) {
+template <typename T> T get_json(nlohmann::json const& json, const nlohmann::json::object_t::key_type& key)
+{
     return json[key];
 }
 
 template <> int get_json(nlohmann::json const& json, const nlohmann::json::object_t::key_type& key)
 {
-    if (!json[key].is_number_integer()) {
+    if(!json[key].is_number_integer()) {
         throw teckos::json_message_error("expected an integer");
     }
     return json[key];
@@ -245,7 +245,8 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
     try {
         auto j = nlohmann::json::parse(msg);
 
-        const PacketType type = static_cast<PacketType>(get_json<int>(j, "type")); // This will throw a json::exception in case the key is not valid
+        const PacketType type = static_cast<PacketType>(
+            get_json<int>(j, "type")); // This will throw a json::exception in case the key is not valid
         switch(type) {
         case PacketType::EVENT: {
             const nlohmann::json jsonData = j["data"];
@@ -293,8 +294,7 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
                     }
                     event_handler(payload);
                 }
-            }
-            else {
+            } else {
                 throw json_message_error("expected 'data' to be a non-empty array!");
             }
             break;
@@ -322,15 +322,15 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
         }
         }
     }
-    catch (nlohmann::json::parse_error& e) {
+    catch(nlohmann::json::parse_error& e) {
         spdlog::error("Could not parse message from server as JSON: {}", e.what());
     }
-    catch (nlohmann::json::exception& e) {
+    catch(nlohmann::json::exception& e) {
         spdlog::error("Error accessing data in json: {}", e.what());
     }
     catch(std::exception& err) {
         // TODO: Discuss error handling here
-        spdlog::error("Could not parse message from server as JSON: {}",  err.what());
+        spdlog::error("Could not parse message from server as JSON: {}", err.what());
     }
 }
 
