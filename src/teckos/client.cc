@@ -1,7 +1,6 @@
 #include "teckos/client.h"
 #include "teckos/global.h"   // for global
 #include <exception>         // for exception
-#include <iostream>          // for string, operator<<
 #include <mutex>             // for lock_guard
 #include <nlohmann/json.hpp> // for json_ref
 #include <utility>           // for move
@@ -164,7 +163,7 @@ void teckos::client::connect()
         }
     });
     websocket->set_close_handler([this](web::websockets::client::websocket_close_status close_status,
-                                        const utility::string_t& reason, const std::error_code& code) {
+                                        const utility::string_t& /* reason */, const std::error_code& /* code */) {
         connected_ = false;
         if(close_status == web::websockets::client::websocket_close_status::abnormal_close) {
             if(!reconnecting_ && was_connected_before_) {

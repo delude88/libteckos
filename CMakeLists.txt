@@ -86,6 +86,10 @@ if (CMAKE_COMPILER_IS_GNUCC)
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -Werror)
     target_compile_options(${PROJECT_NAME}Static PRIVATE -Wall -Wextra -pedantic -Werror)
 endif ()
+if (MSVC)
+    # warning level 4 and all warnings as errors
+    target_compile_options(${PROJECT_NAME}Static PRIVATE /W4 /WX)
+endif()
 if (APPLE)
     if (CMAKE_OSX_DEPLOYMENT_TARGET LESS_EQUAL "10.14")
         # See: https://github.com/nlohmann/json/issues/3156
