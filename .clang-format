@@ -1,5 +1,5 @@
 BasedOnStyle: LLVM
-IndentWidth: 2
+IndentWidth: 4
 Language: Cpp
 PointerAlignment: Left
 BraceWrapping:
@@ -18,3 +18,4 @@ NamespaceIndentation: All
 UseTab: Never
 SpaceAfterCStyleCast: false
 AllowShortFunctionsOnASingleLine: Inline
+ColumnLimit: 120

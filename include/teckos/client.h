@@ -5,11 +5,11 @@
 #ifndef TECKOSCLIENT_H_
 #define TECKOSCLIENT_H_
 
-#include <memory>                     // for shared_ptr
 #include <chrono>                     // for milliseconds
 #include <cstdint>                    // for uint32_t
 #include <iostream>                   // for string
 #include <map>                        // for map
+#include <memory>            // for shared_ptr
 #include <mutex>                      // for recursive_mutex
 #include <nlohmann/json.hpp>          // for json
 #include <optional>                   // for optional
@@ -18,12 +18,12 @@
 #include <vector>                     // for vector
 
 #ifdef USE_IX_WEBSOCKET
-#include <ixwebsocket/IXWebSocket.h>             // for WebSocket
 #include "ixwebsocket/IXNetSystem.h"             // for initNetSystem
 #include "ixwebsocket/IXWebSocketCloseInfo.h"    // for WebSocketCloseInfo
 #include "ixwebsocket/IXWebSocketErrorInfo.h"    // for WebSocketErrorInfo
 #include "ixwebsocket/IXWebSocketMessage.h"      // for WebSocketMessagePtr
 #include "ixwebsocket/IXWebSocketMessageType.h"  // for WebSocketMessageType
+#include <ixwebsocket/IXWebSocket.h>            // for WebSocket
 using WebSocketClient = ix::WebSocket;
 #else
 #include <cpprest/ws_client.h>
@@ -32,15 +32,15 @@ using WebSocketClient = web::websockets::client::websocket_callback_client;
 
 namespace teckos {
 
-enum PacketType { EVENT = 0, ACK = 1 };
+    enum class PacketType { EVENT = 0, ACK = 1 };
 struct packet {
   PacketType type;
   nlohmann::json data;
   std::optional<uint32_t> number;
 };
 struct connection_settings {
-  bool reconnect = false;
-  bool sendPayloadOnReconnect = false;
+        std::atomic<bool> reconnect = false;
+        std::atomic<bool> sendPayloadOnReconnect = false;
 };
 struct connection_info {
   std::string url;
@@ -49,28 +49,39 @@ struct connection_info {
   nlohmann::json payload;
 };
 
+    class invalid_message_parameter_exception : public std::runtime_error {
+    public:
+       invalid_message_parameter_exception(const std::string& what) : std::runtime_error(what) {}
+    };
+
+    class not_connected_exception: public std::runtime_error {
+      public:
+          not_connected_exception() : std::runtime_error("logically not connected, can't send") {}
+    };
+
+    class json_message_error : public std::runtime_error {
+      public:
+          json_message_error(const std::string& what) : std::runtime_error(what) {}
+    };
+
 using Result = const std::vector<nlohmann::json> &;
 using Callback = std::function<void(Result)>;
 
 class client {
  public:
-  explicit client(bool use_async_events = false) noexcept;
+        client();
   ~client();
 
-  void setReconnect(bool reconnect) noexcept;
-
+        void setShouldReconnect(bool reconnect) noexcept;
   [[nodiscard]] bool shouldReconnect() const noexcept;
 
-  void sendPayloadOnReconnect(bool sendPayloadOnReconnect) noexcept;
-
+        void setSendPayloadOnReconnect(bool sendPayloadOnReconnect) noexcept;
   [[nodiscard]] bool isSendingPayloadOnReconnect() const noexcept;
 
-  void setTimeout(std::chrono::milliseconds milliseconds) noexcept;
+        void setReconnectTrySleep(std::chrono::milliseconds milliseconds) noexcept;
+        [[nodiscard]] std::chrono::milliseconds reconnectTrySleep() const noexcept;
 
-  std::chrono::milliseconds getTimeout() const noexcept;
-
-  void on(const std::string &event,
-          const std::function<void(const nlohmann::json &)> &handler);
+        void on(const std::string& event, const std::function<void(const nlohmann::json&)>& handler);
 
   void on_reconnected(const std::function<void()> &handler) noexcept;
   void on_connected(const std::function<void()> &handler) noexcept;
@@ -81,7 +92,7 @@ class client {
    */
   void on_disconnected(const std::function<void(bool)> &handler) noexcept;
 
-  void off(const std::string &event);
+        //void off(const std::string& event);
 
   /**
    * Connect to the given url.
@@ -111,17 +122,13 @@ class client {
    */
   void disconnect();
 
-  void setMessageHandler(
-      const std::function<void(const std::vector<nlohmann::json> &)> &
-      handler) noexcept;
+        void setMessageHandler(const std::function<void(const std::vector<nlohmann::json>&)>& handler) noexcept;
 
   void send(const std::string &event) noexcept(false);
 
-  void send(const std::string &event,
-            const nlohmann::json &args) noexcept(false);
+        void send(const std::string& event, const nlohmann::json& args) noexcept(false);
 
-  void send(const std::string &event, const nlohmann::json &args,
-            Callback callback) noexcept(false);
+        void send(const std::string& event, const nlohmann::json& args, Callback callback) noexcept(false);
 
  protected:
   void connect();
@@ -141,26 +148,42 @@ class client {
   void sendPackage(packet packet) noexcept(false);
 
  private:
-  std::chrono::milliseconds timeout_ = std::chrono::milliseconds(500);
+        std::atomic<std::chrono::milliseconds> timeout_;
+
+        template <class T> 
+        T lockedMemberCopy(T const& toCopy) {
+            T copyToReturn;
+            {
+                std::lock_guard<std::mutex> lock(event_handler_mutex_);
+                copyToReturn = toCopy;
+            }
+            return copyToReturn;
+        }
 
   std::function<void()> connected_handler_;
   std::function<void()> reconnected_handler_;
   std::function<void(bool)> disconnected_handler_;
   std::function<void(const std::vector<nlohmann::json> &)> msg_handler_;
-  std::map<std::string, std::function<void(const nlohmann::json &)>>
-      event_handlers_;
-  std::recursive_mutex mutex_;
-  uint32_t fn_id_{0};
-  std::map<uint32_t, Callback> acks_;
-  std::unique_ptr<WebSocketClient> ws_;
-  std::atomic<bool> connected_{false};
-  std::atomic<bool> reconnecting_{false};
-  bool was_connected_before_{false};
-  bool authenticated_{false};
-  bool use_async_events_;
+        std::map<std::string, std::function<void(const nlohmann::json&)>> event_handlers_;
+        std::mutex event_handler_mutex_; // This locks access to any of the above
+
+        int fn_id_;
+        std::map<int, Callback> acks_;
+        std::mutex ack_mutex_;
+
+#ifdef USE_IX_WEBSOCKET
+        std::shared_ptr<WebSocketClient> ws_;
+#else
+        std::shared_ptr<WebSocketClient> websocket_;
+#endif
+        std::mutex mutex_; // Guard access to the WebSocketClient pointer, which might be reinitialized at any time
+
+        std::atomic<bool> connected_;
+        std::atomic<bool> reconnecting_;
+        std::atomic<bool> was_connected_before_;
+        std::atomic<bool> authenticated_;
   connection_settings settings_;
   connection_info info_;
-  std::vector<std::thread> event_handler_thread_pool_;
 
 #ifndef USE_IX_WEBSOCKET
   std::thread reconnection_thread_;

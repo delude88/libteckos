@@ -58,6 +58,7 @@ else ()
     find_package(OpenSSL REQUIRED)
 endif ()
 find_package(nlohmann_json 3.2.0 REQUIRED)
+find_package(spdlog REQUIRED)
 
 
 #################################################
@@ -85,6 +86,10 @@ if (CMAKE_COMPILER_IS_GNUCC)
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -Werror)
     target_compile_options(${PROJECT_NAME}Static PRIVATE -Wall -Wextra -pedantic -Werror)
 endif ()
+if (MSVC)
+    # warning level 4 and all warnings as errors
+    target_compile_options(${PROJECT_NAME}Static PRIVATE /W4 /WX)
+endif()
 if (APPLE)
     if (CMAKE_OSX_DEPLOYMENT_TARGET LESS_EQUAL "10.14")
         # See: https://github.com/nlohmann/json/issues/3156
@@ -95,10 +100,10 @@ endif ()
 
 target_link_libraries(${PROJECT_NAME}
         PUBLIC
-        nlohmann_json::nlohmann_json)
+        nlohmann_json::nlohmann_json spdlog::spdlog)
 target_link_libraries(${PROJECT_NAME}Static
         PUBLIC
-        nlohmann_json::nlohmann_json)
+        nlohmann_json::nlohmann_json spdlog::spdlog)
 
 if (USE_IX_WEBSOCKET)
     target_compile_definitions(${PROJECT_NAME}
