@@ -85,7 +85,7 @@ teckos::RestResult teckos::rest::Get(const std::string &url, const Header header
       return result;
   }
   catch (std::exception &e) {
-      spdlog::error("Caught execption during teckos::rest::Get: {}", e.what());
+      spdlog::error("Caught exception during teckos::rest::Get: {}", e.what());
       return teckos::RestResult({ 500, e.what(), {} });
   }
 }
@@ -115,7 +115,7 @@ teckos::RestResult teckos::rest::Post(const std::string &url, const Header heade
       return result;
   }
   catch(std::exception& e) {
-      spdlog::error("Caught execption during teckos::rest::Post: {}", e.what());
+      spdlog::error("Caught exception during teckos::rest::Post: {}", e.what());
       return teckos::RestResult({500, e.what(), {}});
   }
 }
