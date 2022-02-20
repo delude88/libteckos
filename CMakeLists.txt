@@ -58,8 +58,10 @@ else ()
     find_package(OpenSSL REQUIRED)
 endif ()
 find_package(nlohmann_json 3.2.0 REQUIRED)
-find_package(spdlog REQUIRED)
-
+if(NOT TARGET spdlog)
+    # Only try to find the spdlog in case it is not already there (to allow us to drop in structlog instead)
+    find_package(spdlog REQUIRED)
+endif()
 
 #################################################
 #
