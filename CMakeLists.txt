@@ -179,23 +179,6 @@ install(
         DIRECTORY ${INCLUDE_DIR}/
         DESTINATION ${INCLUDE_INSTALL_DIR}
 )
-if (USE_IX_WEBSOCKET)
-    export(
-            TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static ixwebsocket
-            NAMESPACE ${PROJECT_NAME}::
-            FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
-else ()
-    export(
-            TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
-            NAMESPACE ${PROJECT_NAME}::
-            FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake")
-endif ()
 install(
         TARGETS ${PROJECT_NAME} ${PROJECT_NAME}Static
-        EXPORT ${TARGETS_EXPORT_NAME}
         INCLUDES DESTINATION ${INCLUDE_INSTALL_DIR})
-
-install(
-        EXPORT ${TARGETS_EXPORT_NAME}
-        NAMESPACE ${PROJECT_NAME}::
-        DESTINATION ${LIB_INSTALL_DIR}/cmake/${PROJECT_NAME})
