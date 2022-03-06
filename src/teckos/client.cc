@@ -312,7 +312,12 @@ void teckos::client::handleMessage(const std::string& msg) noexcept
                 }
             }
             if(callback) {
-                callback(j["data"].get<std::vector<nlohmann::json>>());
+                try {
+                    callback(j["data"].get<std::vector<nlohmann::json>>());
+                }
+                catch (nlohmann::json::exception const& e) {
+                    spdlog::error("libteckos: Error in packet acknowledge reply {}, cannot forward to callback: {}", msg, e.what());
+                }
             }
             break;
         }
