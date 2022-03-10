@@ -194,7 +194,8 @@ void teckos::client::connect()
     }
     catch(web::websockets::client::websocket_exception& e) {
         connected_ = false;
-        throw ConnectionException(e.error_code().value(), e.what());
+        spdlog::warn("Caught websocket exception, that's not a good thing: {}", e.what());
+        throw std::runtime_error(fmt::format("error code {}: {}", e.error_code().value(), e.what()));
     }
 }
 #endif
